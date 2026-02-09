@@ -1,0 +1,335 @@
+#!/usr/bin/env python3
+"""
+PDF Quotation to CSV Converter
+Converts PDF quotation files to standardized CSV format
+"""
+
+import pdfplumber
+import pandas as pd
+import re
+import sys
+from typing import Dict, List, Tuple, Optional
+
+
+class QuotationConverter:
+    def __init__(self, pdf_path: str):
+        self.pdf_path = pdf_path
+        self.header_info = {}
+        self.items = []
+        self.nre_items = []
+        
+    def extract_header_info(self, page) -> Dict[str, str]:
+        """Extract header information (To, From, Date, Ref)"""
+        text = page.extract_text()
+        lines = text.split('\n')
+        
+        header = {}
+        for line in lines:
+            if line.startswith('To:'):
+                header['customer'] = line.replace('To:', '').strip()
+            elif 'From:' in line:
+                header['planner'] = line.split('From:')[1].strip()
+            elif 'Date:' in line:
+                header['date'] = line.split('Date:')[1].strip()
+            elif 'Ref:' in line:
+                header['ref'] = line.split('Ref:')[1].strip()
+                
+        return header
+    
+    def parse_product_field(self, product_text: str) -> Tuple[str, str, str, str]:
+        """
+        Parse Product field into:
+        - Product name (line before Rated Current)
+        - Rated Current
+        - Cable Length
+        - Description (lines after Cable Length)
+        """
+        if not product_text or product_text.strip() == '':
+            return '', '', '', ''
+        
+        lines = product_text.strip().split('\n')
+        product_name = ''
+        rated_current = ''
+        cable_length = ''
+        description_parts = []
+        
+        found_rated = False
+        found_cable = False
+        
+        for i, line in enumerate(lines):
+            line = line.strip()
+            
+            # Check for Rated Current
+            if 'Rated Current:' in line or 'rated current:' in line.lower():
+                rated_current = re.sub(r'.*[Rr]ated [Cc]urrent:\s*', '', line).strip()
+                found_rated = True
+                # Product name is everything before this line
+                if i > 0 and not product_name:
+                    product_name = '\n'.join(lines[:i]).strip()
+                continue
+            
+            # Check for Cable Length
+            if 'Cable Length:' in line or 'cable length:' in line.lower():
+                cable_length = re.sub(r'.*[Cc]able [Ll]ength:\s*', '', line).strip()
+                found_cable = True
+                continue
+            
+            # After Cable Length, everything is description
+            if found_cable:
+                if line.startswith('-'):
+                    line = line[1:].strip()
+                description_parts.append(line)
+            # Before Rated Current, it's product name
+            elif not found_rated and not product_name:
+                if not line.startswith('-'):
+                    product_name = line
+        
+        description = '\n'.join(description_parts).strip()
+        
+        # If no product name found, use first line
+        if not product_name and lines:
+            product_name = lines[0].strip()
+            if product_name.startswith('-'):
+                product_name = product_name[1:].strip()
+        
+        return product_name, rated_current, cable_length, description
+    
+    def extract_table_data(self, page) -> List[Dict]:
+        """Extract main quotation table data"""
+        tables = page.extract_tables()
+        
+        if not tables:
+            return []
+        
+        items = []
+        main_table = None
+        
+        # Find main table (has columns: Item, Product, Delivery Term, MOQ, Unit Price, L/T, Remark)
+        for table in tables:
+            if table and len(table) > 0:
+                header_row = table[0]
+                if 'Product' in str(header_row) and 'MOQ' in str(header_row):
+                    main_table = table
+                    break
+        
+        if not main_table:
+            return []
+        
+        # Find column indices
+        header = main_table[0]
+        col_indices = {}
+        for i, cell in enumerate(header):
+            if cell:
+                cell_lower = str(cell).lower().strip()
+                if 'item' in cell_lower:
+                    col_indices['item'] = i
+                elif 'product' in cell_lower:
+                    col_indices['product'] = i
+                elif 'delivery' in cell_lower:
+                    col_indices['delivery_term'] = i
+                elif 'moq' in cell_lower:
+                    col_indices['moq'] = i
+                elif 'unit price' in cell_lower or 'price' in cell_lower:
+                    col_indices['price'] = i
+                elif 'l/t' in cell_lower:
+                    col_indices['lt'] = i
+                elif 'remark' in cell_lower:
+                    col_indices['remark'] = i
+        
+        # Parse data rows
+        current_item = None
+        current_product = ''
+        current_delivery = ''
+        
+        for row in main_table[1:]:
+            if not row or all(cell is None or str(cell).strip() == '' for cell in row):
+                continue
+            
+            item_num = row[col_indices.get('item', 0)] if 'item' in col_indices else ''
+            product = row[col_indices.get('product', 1)] if 'product' in col_indices else ''
+            delivery = row[col_indices.get('delivery_term', 2)] if 'delivery_term' in col_indices else ''
+            moq = row[col_indices.get('moq', 3)] if 'moq' in col_indices else ''
+            price = row[col_indices.get('price', 4)] if 'price' in col_indices else ''
+            lt = row[col_indices.get('lt', 5)] if 'lt' in col_indices else ''
+            remark = row[col_indices.get('remark', 6)] if 'remark' in col_indices else ''
+            
+            # Update current values if not empty (for merged cells)
+            if item_num and str(item_num).strip():
+                current_item = str(item_num).strip()
+            if product and str(product).strip():
+                current_product = str(product).strip()
+            if delivery and str(delivery).strip():
+                current_delivery = str(delivery).strip()
+            
+            # Only add row if there's MOQ data
+            if moq and str(moq).strip():
+                items.append({
+                    'item': current_item,
+                    'product': current_product,
+                    'delivery_term': current_delivery,
+                    'moq': str(moq).strip(),
+                    'price': str(price).strip() if price else '',
+                    'lt': str(lt).strip() if lt else '',
+                    'remark': str(remark).strip() if remark else ''
+                })
+        
+        return items
+    
+    def extract_nre_list(self, page) -> List[Dict]:
+        """Extract NRE List items"""
+        text = page.extract_text()
+        
+        if 'NRE List' not in text:
+            return []
+        
+        tables = page.extract_tables()
+        nre_items = []
+        
+        for table in tables:
+            if table and len(table) > 0:
+                header_row = table[0]
+                # Check if this is NRE List table
+                if 'Cavity' in str(header_row) or 'Description' in str(header_row):
+                    # Find column indices
+                    col_indices = {}
+                    for i, cell in enumerate(header_row):
+                        if cell:
+                            cell_lower = str(cell).lower().strip()
+                            if 'description' in cell_lower:
+                                col_indices['description'] = i
+                            elif 'cavity' in cell_lower:
+                                col_indices['cavity'] = i
+                            elif 'qty' in cell_lower:
+                                col_indices['qty'] = i
+                            elif 'unit price' in cell_lower:
+                                col_indices['price'] = i
+                            elif 'l/t' in cell_lower:
+                                col_indices['lt'] = i
+                            elif 'remark' in cell_lower:
+                                col_indices['remark'] = i
+                    
+                    # Parse NRE data rows
+                    for row in table[1:]:
+                        if not row or all(cell is None or str(cell).strip() == '' for cell in row):
+                            continue
+                        
+                        description = row[col_indices.get('description', 0)] if 'description' in col_indices else ''
+                        cavity = row[col_indices.get('cavity', 1)] if 'cavity' in col_indices else ''
+                        qty = row[col_indices.get('qty', 2)] if 'qty' in col_indices else ''
+                        price = row[col_indices.get('price', 3)] if 'price' in col_indices else ''
+                        lt = row[col_indices.get('lt', 4)] if 'lt' in col_indices else ''
+                        remark = row[col_indices.get('remark', 5)] if 'remark' in col_indices else ''
+                        
+                        if description and str(description).strip():
+                            nre_items.append({
+                                'product': str(description).strip(),
+                                'cavity': str(cavity).strip() if cavity else '',
+                                'qty': str(qty).strip() if qty else '',
+                                'price': str(price).strip() if price else '',
+                                'lt': str(lt).strip() if lt else '',
+                                'remark': str(remark).strip() if remark else ''
+                            })
+        
+        return nre_items
+    
+    def convert(self) -> pd.DataFrame:
+        """Main conversion function"""
+        with pdfplumber.open(self.pdf_path) as pdf:
+            for page in pdf.pages:
+                # Extract header info from first page
+                if not self.header_info:
+                    self.header_info = self.extract_header_info(page)
+                
+                # Extract table data
+                items = self.extract_table_data(page)
+                self.items.extend(items)
+                
+                # Extract NRE List
+                nre_items = self.extract_nre_list(page)
+                self.nre_items.extend(nre_items)
+        
+        # Convert to CSV format
+        csv_rows = []
+        
+        # Process main items
+        for item in self.items:
+            product_name, rated_current, cable_length, description = self.parse_product_field(item['product'])
+            
+            moq = item['moq']
+            qty_value = moq
+            remark = item['remark']
+            
+            # Handle "Sample" MOQ
+            if 'sample' in str(moq).lower():
+                qty_value = '1'
+                remark = 'Sample'
+            
+            csv_rows.append({
+                'Date': self.header_info.get('date', ''),
+                'Customer': self.header_info.get('customer', ''),
+                'Planner': self.header_info.get('planner', ''),
+                'Product': product_name,
+                'Rated Current': rated_current,
+                'Cable Length': cable_length,
+                'Description': description,
+                'Delivery Term': item['delivery_term'],
+                'MOQ': qty_value,
+                'Price': item['price'],
+                'L/T': item['lt'],
+                'Remark': remark
+            })
+        
+        # Process NRE List items
+        for nre_item in self.nre_items:
+            # Combine description with cavity info
+            description = nre_item['cavity'] if nre_item['cavity'] else ''
+            
+            csv_rows.append({
+                'Date': self.header_info.get('date', ''),
+                'Customer': self.header_info.get('customer', ''),
+                'Planner': self.header_info.get('planner', ''),
+                'Product': nre_item['product'],
+                'Rated Current': '',
+                'Cable Length': '',
+                'Description': description,
+                'Delivery Term': 'NRE List',
+                'MOQ': nre_item['qty'],
+                'Price': nre_item['price'],
+                'L/T': nre_item['lt'],
+                'Remark': nre_item['remark']
+            })
+        
+        # Create DataFrame
+        df = pd.DataFrame(csv_rows)
+        
+        return df
+    
+    def save_to_csv(self, output_path: str):
+        """Convert PDF and save to CSV"""
+        df = self.convert()
+        df.to_csv(output_path, index=False, encoding='utf-8-sig')
+        print(f"✅ Conversion complete: {output_path}")
+        print(f"📊 Total rows: {len(df)}")
+
+
+def main():
+    if len(sys.argv) < 3:
+        print("Usage: python converter.py <input_pdf> <output_csv>")
+        print("Example: python converter.py quotation.pdf output.csv")
+        sys.exit(1)
+    
+    input_pdf = sys.argv[1]
+    output_csv = sys.argv[2]
+    
+    try:
+        converter = QuotationConverter(input_pdf)
+        converter.save_to_csv(output_csv)
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
