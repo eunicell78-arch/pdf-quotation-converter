@@ -2,6 +2,27 @@
 
 PDF 견적서를 CSV 파일로 자동 변환하는 Python 프로그램
 
+---
+
+## 🎯 코딩을 모르시는 분들은 여기를 보세요!
+
+### 📥 빠른 다운로드 (초보자용)
+- **[⚡ 빠른 시작 가이드](빠른시작.md)** - 5분이면 끝! (가장 간단함)
+- **[📥 다운로드 및 사용 방법](다운로드_방법.md)** - 자세한 설명 포함
+
+**빠른 시작:**
+1. **[여기를 클릭하여 ZIP 파일 다운로드](https://github.com/eunicell78-arch/pdf-quotation-converter/archive/refs/heads/copilot/add-gui-for-pdf-to-csv.zip)**
+2. ZIP 파일 압축 해제
+3. Python 설치 ([다운로드](https://www.python.org/downloads/) - "Add to PATH" 체크!)
+4. `run_converter.bat` 파일을 더블클릭하여 실행!
+
+**더 자세한 내용은:**
+- 👉 **[빠른시작.md](빠른시작.md)** - 5분만에 시작하기
+- 👉 **[다운로드_방법.md](다운로드_방법.md)** - 상세 다운로드 가이드
+- 👉 **[USAGE_GUI.md](USAGE_GUI.md)** - 사용법 및 문제 해결
+
+---
+
 ## 📋 주요 기능
 
 - PDF 견적서 자동 파싱
