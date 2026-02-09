@@ -9,6 +9,8 @@ PDF 견적서를 CSV 파일로 자동 변환하는 Python 프로그램
 - 병합된 셀 자동 반복 입력 (Delivery Term, MOQ)
 - NRE List 항목 자동 처리
 - 표준 CSV 양식으로 출력
+- **🆕 사용하기 쉬운 GUI 인터페이스**
+- **🆕 바탕화면 더블클릭 실행 지원**
 
 ## 🛠️ 요구사항
 
@@ -16,12 +18,21 @@ PDF 견적서를 CSV 파일로 자동 변환하는 Python 프로그램
 pip install pdfplumber pandas openpyxl
 ```
 
+GUI 버전 추가 요구사항:
+```bash
+pip install pyinstaller  # EXE 파일 생성 시
+```
+
 ## 📂 프로젝트 구조
 
 ```
 pdf-quotation-converter/
-├── converter.py          # 메인 변환 프로그램
+├── converter.py          # CLI 변환 프로그램
+├── converter_gui.py      # GUI 변환 프로그램 (새로 추가!)
+├── run_converter.bat     # Windows GUI 실행 파일
+├── build_exe.bat         # EXE 빌드 스크립트
 ├── requirements.txt      # 필요한 패키지 목록
+├── USAGE_GUI.md         # GUI 상세 사용 가이드
 ├── samples/             # 샘플 파일 폴더
 │   ├── input/           # PDF 견적서 샘플
 │   └── output/          # 변환된 CSV 샘플
@@ -29,6 +40,23 @@ pdf-quotation-converter/
 ```
 
 ## 🚀 사용 방법
+
+### 방법 1: GUI 버전 (추천 - 초보자용)
+
+#### Option A: BAT 파일로 실행 (Python 설치 필요)
+1. `run_converter.bat` 파일을 더블클릭
+2. GUI 프로그램이 자동으로 실행됩니다
+3. PDF 파일을 선택하고 저장 위치를 지정한 후 변환 시작!
+
+#### Option B: EXE 파일로 실행 (Python 설치 불필요 - 추천!)
+1. `build_exe.bat` 파일을 더블클릭하여 EXE 생성
+2. `dist` 폴더의 `견적서변환기.exe` 파일을 바탕화면에 복사
+3. 바탕화면의 EXE 파일을 더블클릭하여 실행
+4. PDF 파일을 선택하고 저장 위치를 지정한 후 변환 시작!
+
+**📖 자세한 GUI 사용법은 [USAGE_GUI.md](USAGE_GUI.md)를 참고하세요**
+
+### 방법 2: CLI 버전 (명령줄)
 
 ```bash
 python converter.py input.pdf output.csv
