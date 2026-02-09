@@ -39,6 +39,8 @@ if exist "dist" (
 if exist "build" (
     rmdir /s /q build
 )
+REM Remove old .spec file for clean build
+REM Note: You can keep the .spec file if you want to customize PyInstaller settings
 if exist "견적서변환기.spec" (
     del "견적서변환기.spec"
 )

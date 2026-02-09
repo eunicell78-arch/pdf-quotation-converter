@@ -26,6 +26,7 @@ class ConverterGUI:
         self.pdf_path = tk.StringVar()
         self.csv_path = tk.StringVar()
         self.status_text = tk.StringVar(value="대기 중...")
+        self.is_converting = False  # Track conversion state
         
         # Set default save directory to Desktop
         desktop = Path.home() / "Desktop"
@@ -36,6 +37,22 @@ class ConverterGUI:
         
         self.setup_ui()
         
+        # Handle window close event
+        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+        
+    def on_closing(self):
+        """Handle window close event"""
+        if self.is_converting:
+            result = messagebox.askyesno(
+                "변환 진행 중",
+                "변환이 진행 중입니다. 종료하시면 변환이 중단됩니다.\n정말 종료하시겠습니까?",
+                icon='warning'
+            )
+            if not result:
+                return
+        
+        self.root.destroy()
+    
     def setup_ui(self):
         """Setup the user interface"""
         # Title Label
@@ -193,6 +210,7 @@ class ConverterGUI:
             return
         
         # Disable button and start progress
+        self.is_converting = True
         self.convert_button.config(state=tk.DISABLED)
         self.progress_bar.start(10)
         self.status_text.set("변환 중...")
@@ -218,6 +236,7 @@ class ConverterGUI:
     
     def conversion_success(self, csv_file):
         """Handle successful conversion"""
+        self.is_converting = False
         self.progress_bar.stop()
         self.convert_button.config(state=tk.NORMAL)
         self.status_text.set("✅ 변환 완료!")
@@ -243,6 +262,7 @@ class ConverterGUI:
     
     def conversion_error(self, error_message):
         """Handle conversion error"""
+        self.is_converting = False
         self.progress_bar.stop()
         self.convert_button.config(state=tk.NORMAL)
         self.status_text.set("❌ 변환 실패")
