@@ -9,6 +9,7 @@ import pandas as pd
 import re
 import sys
 from typing import Dict, List, Tuple, Optional
+from datetime import datetime
 
 
 class QuotationConverter:
@@ -17,6 +18,32 @@ class QuotationConverter:
         self.header_info = {}
         self.items = []
         self.nre_items = []
+    
+    def format_date_to_iso(self, date_str: str) -> str:
+        """Convert date string to yyyy-mm-dd format"""
+        if not date_str:
+            return ''
+        
+        # Try different date formats commonly found in PDFs
+        date_formats = [
+            '%b. %d, %Y',      # Dec. 22, 2025
+            '%B. %d, %Y',      # December. 22, 2025
+            '%b %d, %Y',       # Dec 22, 2025
+            '%B %d, %Y',       # December 22, 2025
+            '%m/%d/%Y',        # 12/22/2025
+            '%d/%m/%Y',        # 22/12/2025
+            '%Y-%m-%d',        # Already in correct format
+        ]
+        
+        for date_format in date_formats:
+            try:
+                parsed_date = datetime.strptime(date_str.strip(), date_format)
+                return parsed_date.strftime('%Y-%m-%d')
+            except ValueError:
+                continue
+        
+        # If no format matches, return original
+        return date_str
         
     def extract_header_info(self, page) -> Dict[str, str]:
         """Extract header information (To, From, Date, Ref)"""
@@ -30,7 +57,9 @@ class QuotationConverter:
             elif 'From:' in line:
                 header['planner'] = line.split('From:')[1].strip()
             elif 'Date:' in line:
-                header['date'] = line.split('Date:')[1].strip()
+                date_str = line.split('Date:')[1].strip()
+                # Convert to yyyy-mm-dd format
+                header['date'] = self.format_date_to_iso(date_str)
             elif 'Ref:' in line:
                 header['ref'] = line.split('Ref:')[1].strip()
                 
@@ -103,45 +132,90 @@ class QuotationConverter:
         
         items = []
         main_table = None
+        has_header = False
         
         # Find main table (has columns: Item, Product, Delivery Term, MOQ, Unit Price, L/T, Remark)
         for table in tables:
             if table and len(table) > 0:
                 header_row = table[0]
-                if 'Product' in str(header_row) and 'MOQ' in str(header_row):
+                header_str = str(header_row)
+                
+                # Check if it's a proper header row
+                if 'Product' in header_str and 'MOQ' in header_str:
                     main_table = table
+                    has_header = True
                     break
+                
+                # Check if it's a continuation table (no header but has quotation data)
+                # Heuristic: 6-8 columns (flexible), has price with $, numeric MOQ
+                if 6 <= len(table[0]) <= 8:
+                    # Check if looks like quotation data (has $ in price column)
+                    first_row = table[0]
+                    # Check if column 4 (price) has $ and column 3 (MOQ) is numeric-like
+                    has_price = any('$' in str(cell) for cell in first_row if cell)
+                    # Improved numeric detection - check non-empty after cleanup
+                    has_numeric = any(
+                        len(str(cell).replace(',', '').replace('.', '').strip()) > 0 and
+                        str(cell).replace(',', '').replace('.', '').strip().isdigit()
+                        for cell in first_row if cell and str(cell).strip()
+                    )
+                    
+                    if has_price and has_numeric:
+                        main_table = table
+                        has_header = False
+                        break
         
         if not main_table:
             return []
         
         # Find column indices
-        header = main_table[0]
         col_indices = {}
-        for i, cell in enumerate(header):
-            if cell:
-                cell_lower = str(cell).lower().strip()
-                if 'item' in cell_lower:
-                    col_indices['item'] = i
-                elif 'product' in cell_lower:
-                    col_indices['product'] = i
-                elif 'delivery' in cell_lower:
-                    col_indices['delivery_term'] = i
-                elif 'moq' in cell_lower:
-                    col_indices['moq'] = i
-                elif 'unit price' in cell_lower or 'price' in cell_lower:
-                    col_indices['price'] = i
-                elif 'l/t' in cell_lower:
-                    col_indices['lt'] = i
-                elif 'remark' in cell_lower:
-                    col_indices['remark'] = i
+        start_row = 0
+        
+        if has_header:
+            # Parse header to find column indices
+            header = main_table[0]
+            for i, cell in enumerate(header):
+                if cell:
+                    cell_lower = str(cell).lower().strip()
+                    if 'item' in cell_lower:
+                        col_indices['item'] = i
+                    elif 'product' in cell_lower:
+                        col_indices['product'] = i
+                    elif 'delivery' in cell_lower:
+                        col_indices['delivery_term'] = i
+                    elif 'moq' in cell_lower:
+                        col_indices['moq'] = i
+                    elif 'unit price' in cell_lower or 'price' in cell_lower:
+                        col_indices['price'] = i
+                    elif 'l/t' in cell_lower:
+                        col_indices['lt'] = i
+                    elif 'remark' in cell_lower:
+                        col_indices['remark'] = i
+            start_row = 1
+        else:
+            # Continuation table without header - assume standard column order
+            # Item, Product, Delivery Term, MOQ, Unit Price, L/T, Remark
+            col_indices = {
+                'item': 0,
+                'product': 1,
+                'delivery_term': 2,
+                'moq': 3,
+                'price': 4,
+                'lt': 5,
+                'remark': 6
+            }
+            start_row = 0
         
         # Parse data rows
         current_item = None
         current_product = ''
         current_delivery = ''
+        current_moq = ''
+        current_lt = ''
+        current_remark = ''
         
-        for row in main_table[1:]:
+        for row in main_table[start_row:]:
             if not row or all(cell is None or str(cell).strip() == '' for cell in row):
                 continue
             
@@ -160,26 +234,39 @@ class QuotationConverter:
                 current_product = str(product).strip()
             if delivery and str(delivery).strip():
                 current_delivery = str(delivery).strip()
-            
-            # Only add row if there's MOQ data
             if moq and str(moq).strip():
+                current_moq = str(moq).strip()
+            if lt and str(lt).strip():
+                current_lt = str(lt).strip()
+            if remark and str(remark).strip():
+                current_remark = str(remark).strip()
+            
+            # Add row if there's price data (indicates a valid row)
+            if price and str(price).strip():
                 items.append({
                     'item': current_item,
                     'product': current_product,
                     'delivery_term': current_delivery,
-                    'moq': str(moq).strip(),
-                    'price': str(price).strip() if price else '',
-                    'lt': str(lt).strip() if lt else '',
-                    'remark': str(remark).strip() if remark else ''
+                    'moq': current_moq,
+                    'price': str(price).strip(),
+                    'lt': current_lt,
+                    'remark': current_remark
                 })
         
         return items
     
     def extract_nre_list(self, page) -> List[Dict]:
-        """Extract NRE List items"""
+        """Extract NRE List items
+        Requirements:
+        - Product = Description field
+        - Description = Cavity info
+        - Delivery Term = "NRE List"
+        - MOQ = Qty value
+        - Price = Unit Price (not Amount)
+        """
         text = page.extract_text()
         
-        if 'NRE List' not in text:
+        if 'NRE List' not in text and 'NRE' not in text:
             return []
         
         tables = page.extract_tables()
@@ -188,8 +275,9 @@ class QuotationConverter:
         for table in tables:
             if table and len(table) > 0:
                 header_row = table[0]
-                # Check if this is NRE List table
-                if 'Cavity' in str(header_row) or 'Description' in str(header_row):
+                # Check if this is NRE List table (has Cavity or Description columns)
+                header_str = ' '.join([str(cell) for cell in header_row if cell])
+                if 'Cavity' in header_str or ('Description' in header_str and 'Qty' in header_str):
                     # Find column indices
                     col_indices = {}
                     for i, cell in enumerate(header_row):
@@ -199,10 +287,12 @@ class QuotationConverter:
                                 col_indices['description'] = i
                             elif 'cavity' in cell_lower:
                                 col_indices['cavity'] = i
-                            elif 'qty' in cell_lower:
+                            elif 'qty' in cell_lower and 'unit' not in cell_lower:
                                 col_indices['qty'] = i
                             elif 'unit price' in cell_lower:
-                                col_indices['price'] = i
+                                col_indices['unit_price'] = i
+                            elif 'amount' in cell_lower:
+                                col_indices['amount'] = i
                             elif 'l/t' in cell_lower:
                                 col_indices['lt'] = i
                             elif 'remark' in cell_lower:
@@ -216,23 +306,31 @@ class QuotationConverter:
                         description = row[col_indices.get('description', 0)] if 'description' in col_indices else ''
                         cavity = row[col_indices.get('cavity', 1)] if 'cavity' in col_indices else ''
                         qty = row[col_indices.get('qty', 2)] if 'qty' in col_indices else ''
-                        price = row[col_indices.get('price', 3)] if 'price' in col_indices else ''
-                        lt = row[col_indices.get('lt', 4)] if 'lt' in col_indices else ''
-                        remark = row[col_indices.get('remark', 5)] if 'remark' in col_indices else ''
+                        unit_price = row[col_indices.get('unit_price', 3)] if 'unit_price' in col_indices else ''
+                        lt = row[col_indices.get('lt', -2)] if 'lt' in col_indices else ''
+                        remark = row[col_indices.get('remark', -1)] if 'remark' in col_indices else ''
                         
+                        # Only add if description exists
                         if description and str(description).strip():
+                            # Combine description with cavity in description field
+                            desc_text = str(description).strip()
+                            if cavity and str(cavity).strip():
+                                desc_text = f"{desc_text}\nCavity: {str(cavity).strip()}"
+                            
                             nre_items.append({
-                                'product': str(description).strip(),
-                                'cavity': str(cavity).strip() if cavity else '',
-                                'qty': str(qty).strip() if qty else '',
-                                'price': str(price).strip() if price else '',
+                                'product': str(description).strip(),  # Product = Description
+                                'description': desc_text,  # Description includes Cavity
+                                'qty': str(qty).strip() if qty else '',  # MOQ = Qty
+                                'price': str(unit_price).strip() if unit_price else '',  # Only Unit Price
                                 'lt': str(lt).strip() if lt else '',
                                 'remark': str(remark).strip() if remark else ''
                             })
         
         return nre_items
+        
+        return nre_items
     
-    def convert(self) -> pd.DataFrame:
+    def convert(self, verbose=False) -> pd.DataFrame:
         """Main conversion function"""
         with pdfplumber.open(self.pdf_path) as pdf:
             for page in pdf.pages:
@@ -242,10 +340,14 @@ class QuotationConverter:
                 
                 # Extract table data
                 items = self.extract_table_data(page)
+                if verbose:
+                    print(f"📄 Page {page.page_number}: Extracted {len(items)} quotation items")
                 self.items.extend(items)
                 
                 # Extract NRE List
                 nre_items = self.extract_nre_list(page)
+                if verbose and nre_items:
+                    print(f"📄 Page {page.page_number}: Extracted {len(nre_items)} NRE items")
                 self.nre_items.extend(nre_items)
         
         # Convert to CSV format
@@ -272,7 +374,7 @@ class QuotationConverter:
                 'Rated Current': rated_current,
                 'Cable Length': cable_length,
                 'Description': description,
-                'Delivery Term': item['delivery_term'],
+                'Delivery Term': item['delivery_term'].replace('\n', ' '),
                 'MOQ': qty_value,
                 'Price': item['price'],
                 'L/T': item['lt'],
@@ -281,20 +383,17 @@ class QuotationConverter:
         
         # Process NRE List items
         for nre_item in self.nre_items:
-            # Combine description with cavity info
-            description = nre_item['cavity'] if nre_item['cavity'] else ''
-            
             csv_rows.append({
                 'Date': self.header_info.get('date', ''),
                 'Customer': self.header_info.get('customer', ''),
                 'Planner': self.header_info.get('planner', ''),
-                'Product': nre_item['product'],
+                'Product': nre_item['product'],  # Product = Description from NRE
                 'Rated Current': '',
                 'Cable Length': '',
-                'Description': description,
-                'Delivery Term': 'NRE List',
-                'MOQ': nre_item['qty'],
-                'Price': nre_item['price'],
+                'Description': nre_item['description'],  # Description includes Cavity
+                'Delivery Term': 'NRE List',  # Fixed value
+                'MOQ': nre_item['qty'],  # MOQ = Qty
+                'Price': nre_item['price'],  # Unit Price only
                 'L/T': nre_item['lt'],
                 'Remark': nre_item['remark']
             })
@@ -304,26 +403,42 @@ class QuotationConverter:
         
         return df
     
-    def save_to_csv(self, output_path: str):
+    def save_to_csv(self, output_path: str, verbose=False):
         """Convert PDF and save to CSV"""
-        df = self.convert()
+        df = self.convert(verbose=verbose)
         df.to_csv(output_path, index=False, encoding='utf-8-sig')
         print(f"✅ Conversion complete: {output_path}")
         print(f"📊 Total rows: {len(df)}")
+        
+        if verbose:
+            # Check for blank L/T values
+            blank_lt = df[df['L/T'].isna() | (df['L/T'] == '')]
+            if len(blank_lt) > 0:
+                print(f"⚠️  Warning: {len(blank_lt)} rows have blank L/T")
+            else:
+                print(f"✅ All L/T values filled")
+            
+            # Show distribution
+            print(f"\n📊 Data summary:")
+            print(f"   - 6M items: {len(df[df['Cable Length'] == '6M'])}")
+            print(f"   - 7.62M items: {len(df[df['Cable Length'] == '7.62M'])}")
+            print(f"   - NRE items: {len(df[df['Delivery Term'] == 'NRE List'])}")
 
 
 def main():
     if len(sys.argv) < 3:
-        print("Usage: python converter.py <input_pdf> <output_csv>")
+        print("Usage: python converter.py <input_pdf> <output_csv> [-v|--verbose]")
         print("Example: python converter.py quotation.pdf output.csv")
+        print("Example: python converter.py quotation.pdf output.csv --verbose")
         sys.exit(1)
     
     input_pdf = sys.argv[1]
     output_csv = sys.argv[2]
+    verbose = len(sys.argv) > 3 and sys.argv[3] in ['-v', '--verbose']
     
     try:
         converter = QuotationConverter(input_pdf)
-        converter.save_to_csv(output_csv)
+        converter.save_to_csv(output_csv, verbose=verbose)
     except Exception as e:
         print(f"❌ Error: {e}")
         import traceback

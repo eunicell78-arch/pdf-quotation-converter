@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>404 - 설정이 필요합니다</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', '맑은 고딕', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 600px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 {
+            color: #f44336;
+            margin-bottom: 20px;
+        }
+        .warning {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .solution {
+            background: #e3f2fd;
+            border-left: 4px solid #2196F3;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .button {
+            display: inline-block;
+            background: #2196F3;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            text-decoration: none;
+            margin: 10px 10px 10px 0;
+            font-weight: 600;
+        }
+        .button:hover {
+            background: #1976D2;
+        }
+        code {
+            background: #f5f5f5;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: monospace;
+        }
+        ul {
+            line-height: 1.8;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>⚠️ 404 - GitHub Pages 설정이 필요합니다</h1>
+        
+        <div class="warning">
+            <strong>현재 상태:</strong> 웹 버전에 접근하려고 하셨지만, GitHub Pages가 아직 활성화되지 않았습니다.
+        </div>
+
+        <h2>🔧 관리자용: 활성화 방법</h2>
+        <ol>
+            <li>GitHub 저장소로 이동: <code>eunicell78-arch/pdf-quotation-converter</code></li>
+            <li><strong>Settings</strong> → <strong>Pages</strong> 메뉴 선택</li>
+            <li>Source에서 Branch: <code>copilot/add-gui-for-pdf-to-csv</code> 또는 <code>gh-pages</code> 선택</li>
+            <li><strong>Save</strong> 클릭</li>
+            <li>1-3분 기다린 후 이 페이지 새로고침</li>
+        </ol>
+
+        <div class="solution">
+            <h2>💡 지금 바로 사용하는 방법</h2>
+            <p>GitHub Pages 설정을 기다리지 않고 바로 사용하고 싶으시다면:</p>
+            
+            <h3>방법 1: ZIP 다운로드</h3>
+            <a href="https://github.com/eunicell78-arch/pdf-quotation-converter/archive/refs/heads/copilot/add-gui-for-pdf-to-csv.zip" class="button">📥 ZIP 다운로드</a>
+            <p>다운로드 후 압축을 풀고 <code>index.html</code> 파일을 브라우저로 여세요.</p>
+
+            <h3>방법 2: 로컬 서버 실행</h3>
+            <p>Python이 설치되어 있다면:</p>
+            <pre><code>python -m http.server 8000</code></pre>
+            <p>그 다음 브라우저에서 <code>http://localhost:8000</code> 접속</p>
+
+            <h3>방법 3: 데스크톱 버전 사용</h3>
+            <a href="https://github.com/eunicell78-arch/pdf-quotation-converter" class="button">📦 데스크톱 버전 보기</a>
+            <p>Python 기반 GUI 프로그램도 제공됩니다.</p>
+        </div>
+
+        <hr style="margin: 30px 0; border: none; border-top: 1px solid #ddd;">
+
+        <p style="text-align: center; color: #666;">
+            <a href="https://github.com/eunicell78-arch/pdf-quotation-converter" style="color: #2196F3;">GitHub 저장소 바로가기 →</a>
+        </p>
+    </div>
+</body>
+</html>
