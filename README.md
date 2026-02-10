@@ -4,7 +4,33 @@ PDF 견적서를 CSV 파일로 자동 변환하는 Python 프로그램
 
 ---
 
-## 🌐 웹 버전 - 설치 없이 바로 사용! (NEW!)
+## 🌟 **NEW! Streamlit 웹 앱** (가장 쉽고 정확한 방법!)
+
+### 🚀 빠른 시작
+
+```bash
+streamlit run streamlit_app.py
+```
+
+브라우저가 자동으로 열립니다: http://localhost:8501
+
+### ✨ Streamlit 버전의 장점
+
+- ✅ **완벽한 정확도**: Python pdfplumber 사용 → 복잡한 PDF도 완벽 처리
+- ✅ **드래그 앤 드롭**: 파일을 끌어다 놓기만 하면 변환 완료
+- ✅ **실시간 미리보기**: 변환 결과를 즉시 확인
+- ✅ **CSV & Excel**: 두 가지 형식으로 다운로드
+- ✅ **무료 배포**: Streamlit Cloud에 무료 호스팅 가능
+
+### 📦 Streamlit Cloud 배포 (무료!)
+
+자세한 내용: [STREAMLIT_배포.md](STREAMLIT_배포.md)
+
+**1-Click 배포:** https://streamlit.io/cloud → 저장소 연결 → 자동 배포!
+
+---
+
+## 🌐 HTML 웹 버전 (간단한 PDF용)
 
 ### ⚠️ GitHub Pages 설정 필요
 
