@@ -140,6 +140,9 @@ class QuotationConverter:
         current_item = None
         current_product = ''
         current_delivery = ''
+        current_moq = ''
+        current_lt = ''
+        current_remark = ''
         
         for row in main_table[1:]:
             if not row or all(cell is None or str(cell).strip() == '' for cell in row):
@@ -160,26 +163,39 @@ class QuotationConverter:
                 current_product = str(product).strip()
             if delivery and str(delivery).strip():
                 current_delivery = str(delivery).strip()
-            
-            # Only add row if there's MOQ data
             if moq and str(moq).strip():
+                current_moq = str(moq).strip()
+            if lt and str(lt).strip():
+                current_lt = str(lt).strip()
+            if remark and str(remark).strip():
+                current_remark = str(remark).strip()
+            
+            # Add row if there's price data (indicates a valid row)
+            if price and str(price).strip():
                 items.append({
                     'item': current_item,
                     'product': current_product,
                     'delivery_term': current_delivery,
-                    'moq': str(moq).strip(),
-                    'price': str(price).strip() if price else '',
-                    'lt': str(lt).strip() if lt else '',
-                    'remark': str(remark).strip() if remark else ''
+                    'moq': current_moq,
+                    'price': str(price).strip(),
+                    'lt': current_lt,
+                    'remark': current_remark
                 })
         
         return items
     
     def extract_nre_list(self, page) -> List[Dict]:
-        """Extract NRE List items"""
+        """Extract NRE List items
+        Requirements:
+        - Product = Description field
+        - Description = Cavity info
+        - Delivery Term = "NRE List"
+        - MOQ = Qty value
+        - Price = Unit Price (not Amount)
+        """
         text = page.extract_text()
         
-        if 'NRE List' not in text:
+        if 'NRE List' not in text and 'NRE' not in text:
             return []
         
         tables = page.extract_tables()
@@ -188,8 +204,9 @@ class QuotationConverter:
         for table in tables:
             if table and len(table) > 0:
                 header_row = table[0]
-                # Check if this is NRE List table
-                if 'Cavity' in str(header_row) or 'Description' in str(header_row):
+                # Check if this is NRE List table (has Cavity or Description columns)
+                header_str = ' '.join([str(cell) for cell in header_row if cell])
+                if 'Cavity' in header_str or ('Description' in header_str and 'Qty' in header_str):
                     # Find column indices
                     col_indices = {}
                     for i, cell in enumerate(header_row):
@@ -199,10 +216,12 @@ class QuotationConverter:
                                 col_indices['description'] = i
                             elif 'cavity' in cell_lower:
                                 col_indices['cavity'] = i
-                            elif 'qty' in cell_lower:
+                            elif 'qty' in cell_lower and 'unit' not in cell_lower:
                                 col_indices['qty'] = i
                             elif 'unit price' in cell_lower:
-                                col_indices['price'] = i
+                                col_indices['unit_price'] = i
+                            elif 'amount' in cell_lower:
+                                col_indices['amount'] = i
                             elif 'l/t' in cell_lower:
                                 col_indices['lt'] = i
                             elif 'remark' in cell_lower:
@@ -216,19 +235,27 @@ class QuotationConverter:
                         description = row[col_indices.get('description', 0)] if 'description' in col_indices else ''
                         cavity = row[col_indices.get('cavity', 1)] if 'cavity' in col_indices else ''
                         qty = row[col_indices.get('qty', 2)] if 'qty' in col_indices else ''
-                        price = row[col_indices.get('price', 3)] if 'price' in col_indices else ''
-                        lt = row[col_indices.get('lt', 4)] if 'lt' in col_indices else ''
-                        remark = row[col_indices.get('remark', 5)] if 'remark' in col_indices else ''
+                        unit_price = row[col_indices.get('unit_price', 3)] if 'unit_price' in col_indices else ''
+                        lt = row[col_indices.get('lt', -2)] if 'lt' in col_indices else ''
+                        remark = row[col_indices.get('remark', -1)] if 'remark' in col_indices else ''
                         
+                        # Only add if description exists
                         if description and str(description).strip():
+                            # Combine description with cavity in description field
+                            desc_text = str(description).strip()
+                            if cavity and str(cavity).strip():
+                                desc_text = f"{desc_text}\nCavity: {str(cavity).strip()}"
+                            
                             nre_items.append({
-                                'product': str(description).strip(),
-                                'cavity': str(cavity).strip() if cavity else '',
-                                'qty': str(qty).strip() if qty else '',
-                                'price': str(price).strip() if price else '',
+                                'product': str(description).strip(),  # Product = Description
+                                'description': desc_text,  # Description includes Cavity
+                                'qty': str(qty).strip() if qty else '',  # MOQ = Qty
+                                'price': str(unit_price).strip() if unit_price else '',  # Only Unit Price
                                 'lt': str(lt).strip() if lt else '',
                                 'remark': str(remark).strip() if remark else ''
                             })
+        
+        return nre_items
         
         return nre_items
     
@@ -281,20 +308,17 @@ class QuotationConverter:
         
         # Process NRE List items
         for nre_item in self.nre_items:
-            # Combine description with cavity info
-            description = nre_item['cavity'] if nre_item['cavity'] else ''
-            
             csv_rows.append({
                 'Date': self.header_info.get('date', ''),
                 'Customer': self.header_info.get('customer', ''),
                 'Planner': self.header_info.get('planner', ''),
-                'Product': nre_item['product'],
+                'Product': nre_item['product'],  # Product = Description from NRE
                 'Rated Current': '',
                 'Cable Length': '',
-                'Description': description,
-                'Delivery Term': 'NRE List',
-                'MOQ': nre_item['qty'],
-                'Price': nre_item['price'],
+                'Description': nre_item['description'],  # Description includes Cavity
+                'Delivery Term': 'NRE List',  # Fixed value
+                'MOQ': nre_item['qty'],  # MOQ = Qty
+                'Price': nre_item['price'],  # Unit Price only
                 'L/T': nre_item['lt'],
                 'Remark': nre_item['remark']
             })
