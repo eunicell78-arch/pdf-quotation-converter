@@ -55,6 +55,10 @@ python converter.py input.pdf output.csv
 - NRE List 항목 별도 처리
 - 병합된 셀 자동 반복
 
+## 🔗 관련 프로젝트
+
+- [eunicell78-arch/saju84](https://github.com/eunicell78-arch/saju84) - 사주팔자 만세력 계산기 (Saju/Manseryeok Calculator)
+
 ## 📝 라이선스
 
 MIT License
