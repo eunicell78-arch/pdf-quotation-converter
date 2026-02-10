@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>견적서 변환기 - PDF to CSV Converter (온라인)</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1>📄 PDF 견적서 → CSV 변환기</h1>
+            <p class="subtitle">웹브라우저에서 바로 사용하세요! (설치 불필요)</p>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Instructions -->
+            <div class="info-box">
+                <h2>🎯 사용 방법</h2>
+                <ol>
+                    <li>아래에서 PDF 견적서 파일을 선택하거나 드래그하세요</li>
+                    <li>"변환 시작" 버튼을 클릭하세요</li>
+                    <li>CSV 파일이 자동으로 다운로드됩니다!</li>
+                </ol>
+                <p class="note">💡 <strong>중요:</strong> 모든 처리는 여러분의 컴퓨터에서 이루어지며, 파일은 서버로 전송되지 않습니다.</p>
+            </div>
+
+            <!-- File Upload Area -->
+            <div class="upload-section">
+                <div class="file-drop-zone" id="dropZone">
+                    <div class="drop-zone-content">
+                        <svg class="upload-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="17 8 12 3 7 8"></polyline>
+                            <line x1="12" y1="3" x2="12" y2="15"></line>
+                        </svg>
+                        <p class="drop-zone-text">PDF 파일을 여기에 드래그하거나 클릭하여 선택하세요</p>
+                        <p class="drop-zone-subtext">또는</p>
+                        <input type="file" id="pdfFileInput" accept=".pdf" style="display: none;">
+                        <button class="btn-select-file" onclick="document.getElementById('pdfFileInput').click()">
+                            📁 파일 선택
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Selected File Info -->
+                <div id="fileInfo" class="file-info" style="display: none;">
+                    <div class="file-info-content">
+                        <svg class="file-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
+                            <polyline points="13 2 13 9 20 9"></polyline>
+                        </svg>
+                        <div class="file-details">
+                            <p class="file-name" id="fileName">파일명</p>
+                            <p class="file-size" id="fileSize">파일 크기</p>
+                        </div>
+                        <button class="btn-remove" onclick="removeFile()">✕</button>
+                    </div>
+                </div>
+
+                <!-- Convert Button -->
+                <button id="convertBtn" class="btn-convert" onclick="convertPDF()" disabled>
+                    🚀 변환 시작
+                </button>
+            </div>
+
+            <!-- Progress Section -->
+            <div id="progressSection" class="progress-section" style="display: none;">
+                <div class="progress-bar-container">
+                    <div class="progress-bar" id="progressBar"></div>
+                </div>
+                <p id="statusText" class="status-text">처리 중...</p>
+            </div>
+
+            <!-- Result Section -->
+            <div id="resultSection" class="result-section" style="display: none;">
+                <div class="result-success">
+                    <svg class="success-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                        <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                    </svg>
+                    <h3>✅ 변환 완료!</h3>
+                    <p id="resultMessage">CSV 파일이 다운로드되었습니다.</p>
+                    <button class="btn-new-file" onclick="resetConverter()">새 파일 변환하기</button>
+                </div>
+            </div>
+
+            <!-- Error Section -->
+            <div id="errorSection" class="error-section" style="display: none;">
+                <div class="error-content">
+                    <svg class="error-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="12" y1="8" x2="12" y2="12"></line>
+                        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                    </svg>
+                    <h3>❌ 변환 실패</h3>
+                    <p id="errorMessage">오류가 발생했습니다.</p>
+                    <button class="btn-retry" onclick="resetConverter()">다시 시도</button>
+                </div>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>
+                💻 <a href="https://github.com/eunicell78-arch/pdf-quotation-converter" target="_blank">GitHub에서 소스 코드 보기</a>
+                | 
+                📥 <a href="https://github.com/eunicell78-arch/pdf-quotation-converter/archive/refs/heads/copilot/add-gui-for-pdf-to-csv.zip" target="_blank">데스크톱 버전 다운로드</a>
+            </p>
+            <p class="footer-note">이 도구는 브라우저에서 완전히 실행되며, 파일을 서버로 전송하지 않습니다.</p>
+        </footer>
+    </div>
+
+    <script src="web-converter.js"></script>
+</body>
+</html>
