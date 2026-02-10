@@ -2,35 +2,108 @@
 
 이 파일은 웹 버전을 활성화하기 위한 관리자용 안내입니다.
 
+## ⚠️ 현재 상태: 404 오류 해결 방법
+
+웹 링크가 404 오류를 반환하는 경우, GitHub Pages가 아직 활성화되지 않았기 때문입니다.
+
 ## 📋 GitHub Pages 설정하기
 
-### 1단계: GitHub 저장소 설정으로 이동
+### 방법 1: 기존 브랜치 사용 (추천)
 
-1. GitHub에서 이 저장소로 이동: https://github.com/eunicell78-arch/pdf-quotation-converter
-2. 상단의 **Settings** (설정) 탭 클릭
-3. 왼쪽 메뉴에서 **Pages** 클릭
+1. **GitHub 저장소 설정으로 이동**
+   - https://github.com/eunicell78-arch/pdf-quotation-converter
+   - 상단의 **Settings** (설정) 탭 클릭
+   - 왼쪽 메뉴에서 **Pages** 클릭
 
-### 2단계: Branch 설정
-
-1. **Source** 섹션에서:
+2. **Source 설정**
    - Branch: `copilot/add-gui-for-pdf-to-csv` 선택
    - Folder: `/ (root)` 선택
-2. **Save** 버튼 클릭
+   - **Save** 버튼 클릭
 
-### 3단계: 배포 확인
+3. **배포 확인**
+   - 몇 분 기다립니다 (보통 1-3분)
+   - 페이지를 새로고침합니다
+   - 상단에 다음과 같은 메시지가 나타납니다:
+     ```
+     ✅ Your site is published at https://eunicell78-arch.github.io/pdf-quotation-converter/
+     ```
 
-1. 몇 분 기다립니다 (보통 1-3분)
-2. 페이지를 새로고침합니다
-3. 상단에 다음과 같은 메시지가 나타납니다:
-   ```
-   ✅ Your site is published at https://eunicell78-arch.github.io/pdf-quotation-converter/
-   ```
+### 방법 2: gh-pages 브랜치 생성 (대안)
 
-### 4단계: 테스트
+GitHub Pages는 `gh-pages` 브랜치를 자동으로 감지합니다:
 
-1. 표시된 링크를 클릭합니다
-2. 웹 변환기 페이지가 열리는지 확인합니다
-3. PDF 파일을 업로드하고 변환을 테스트합니다
+```bash
+# 현재 브랜치에서 gh-pages 브랜치 생성
+git checkout copilot/add-gui-for-pdf-to-csv
+git checkout -b gh-pages
+git push origin gh-pages
+
+# GitHub이 자동으로 감지하고 배포합니다
+```
+
+## 🔍 404 오류 해결
+
+### 원인 1: GitHub Pages가 활성화되지 않음
+**해결**: 위의 방법 1 또는 2를 따라 GitHub Pages를 활성화하세요.
+
+### 원인 2: 잘못된 브랜치 선택
+**해결**: Settings → Pages에서 올바른 브랜치(`copilot/add-gui-for-pdf-to-csv` 또는 `gh-pages`)를 선택했는지 확인하세요.
+
+### 원인 3: 배포 진행 중
+**해결**: 첫 배포는 3-5분 정도 걸릴 수 있습니다. 잠시 기다린 후 다시 시도하세요.
+
+### 원인 4: 저장소가 Private
+**해결**: GitHub Pages는 Public 저장소에서만 무료로 사용 가능합니다. Settings → General에서 저장소를 Public으로 변경하세요.
+
+## 🔄 GitHub Pages 없이 사용하는 방법
+
+GitHub Pages 설정이 어려운 경우, 다음 대안을 사용하세요:
+
+### 대안 1: 로컬 웹 서버 실행
+
+```bash
+# 저장소 클론
+git clone https://github.com/eunicell78-arch/pdf-quotation-converter.git
+cd pdf-quotation-converter
+
+# Python 웹 서버 실행 (Python 3 설치 필요)
+python -m http.server 8000
+
+# 브라우저에서 열기
+# http://localhost:8000
+```
+
+### 대안 2: ZIP 다운로드 후 브라우저에서 열기
+
+1. [ZIP 파일 다운로드](https://github.com/eunicell78-arch/pdf-quotation-converter/archive/refs/heads/copilot/add-gui-for-pdf-to-csv.zip)
+2. 압축 해제
+3. `index.html` 파일을 더블클릭하거나 브라우저로 드래그
+
+⚠️ **주의**: 일부 브라우저는 보안상의 이유로 로컬 파일에서 PDF.js CDN을 차단할 수 있습니다. 이 경우 위의 로컬 웹 서버 방법을 사용하세요.
+
+### 대안 3: Node.js 서버 사용
+
+```bash
+# npx를 사용한 간단한 서버 (Node.js 필요)
+npx http-server -p 8000
+
+# 또는 
+npx serve
+```
+
+## 📁 웹 버전 파일 구조
+
+```
+pdf-quotation-converter/
+├── index.html          # 메인 웹 페이지 ✅
+├── styles.css          # 스타일시트 ✅
+├── web-converter.js    # JavaScript 변환 로직 ✅
+├── WEB_사용법.md       # 웹 버전 사용 가이드
+├── README.md           # 프로젝트 메인 README
+└── ... (기타 파일들)
+```
+
+✅ 표시된 3개 파일이 웹 버전 실행에 필요합니다.
 
 ---
 

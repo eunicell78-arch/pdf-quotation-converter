@@ -6,7 +6,42 @@ PDF 견적서를 CSV 파일로 자동 변환하는 Python 프로그램
 
 ## 🌐 웹 버전 - 설치 없이 바로 사용! (NEW!)
 
-### 🚀 [여기를 클릭하여 웹에서 바로 사용하기](https://eunicell78-arch.github.io/pdf-quotation-converter/)
+### ⚠️ GitHub Pages 설정 필요
+
+웹 버전을 사용하려면 **GitHub Pages 활성화**가 필요합니다:
+
+1. **저장소 관리자**가 다음을 수행해야 합니다:
+   - GitHub 저장소 → Settings → Pages
+   - Source: `copilot/add-gui-for-pdf-to-csv` 브랜치 선택
+   - 또는 `gh-pages` 브랜치 생성 및 선택
+   - Save 클릭
+
+2. **활성화 후 웹 주소**:
+   - 👉 **https://eunicell78-arch.github.io/pdf-quotation-converter/**
+
+3. **자세한 설정 방법**: [GITHUB_PAGES_설정.md](GITHUB_PAGES_설정.md) 참고
+
+### 🔄 대체 방법 (GitHub Pages 없이 사용)
+
+GitHub Pages가 설정되지 않은 경우, 다음 방법으로 사용하세요:
+
+1. **다운로드 후 로컬 실행**:
+   ```bash
+   # 저장소 복제
+   git clone https://github.com/eunicell78-arch/pdf-quotation-converter.git
+   cd pdf-quotation-converter
+   
+   # 로컬 웹 서버 실행 (Python이 설치된 경우)
+   python -m http.server 8000
+   
+   # 브라우저에서 접속
+   # http://localhost:8000
+   ```
+
+2. **ZIP 다운로드 후 실행**:
+   - [ZIP 다운로드](https://github.com/eunicell78-arch/pdf-quotation-converter/archive/refs/heads/copilot/add-gui-for-pdf-to-csv.zip)
+   - 압축 해제
+   - `index.html` 파일을 브라우저로 직접 열기
 
 **특징:**
 - ✅ **설치 불필요** - 웹브라우저에서 바로 사용
@@ -16,7 +51,7 @@ PDF 견적서를 CSV 파일로 자동 변환하는 Python 프로그램
 - ✅ **모든 기기** - Windows, Mac, Linux, 스마트폰 모두 지원
 
 **사용 방법:**
-1. 위 링크 클릭
+1. 위 링크 접속 (GitHub Pages 활성화 후)
 2. PDF 파일 선택 (또는 드래그)
 3. "변환 시작" 버튼 클릭
 4. CSV 파일 자동 다운로드!
