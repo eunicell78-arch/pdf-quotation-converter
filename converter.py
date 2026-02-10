@@ -9,6 +9,7 @@ import pandas as pd
 import re
 import sys
 from typing import Dict, List, Tuple, Optional
+from datetime import datetime
 
 
 class QuotationConverter:
@@ -17,6 +18,32 @@ class QuotationConverter:
         self.header_info = {}
         self.items = []
         self.nre_items = []
+    
+    def format_date_to_iso(self, date_str: str) -> str:
+        """Convert date string to yyyy-mm-dd format"""
+        if not date_str:
+            return ''
+        
+        # Try different date formats commonly found in PDFs
+        date_formats = [
+            '%b. %d, %Y',      # Dec. 22, 2025
+            '%B. %d, %Y',      # December. 22, 2025
+            '%b %d, %Y',       # Dec 22, 2025
+            '%B %d, %Y',       # December 22, 2025
+            '%m/%d/%Y',        # 12/22/2025
+            '%d/%m/%Y',        # 22/12/2025
+            '%Y-%m-%d',        # Already in correct format
+        ]
+        
+        for date_format in date_formats:
+            try:
+                parsed_date = datetime.strptime(date_str.strip(), date_format)
+                return parsed_date.strftime('%Y-%m-%d')
+            except ValueError:
+                continue
+        
+        # If no format matches, return original
+        return date_str
         
     def extract_header_info(self, page) -> Dict[str, str]:
         """Extract header information (To, From, Date, Ref)"""
@@ -30,7 +57,9 @@ class QuotationConverter:
             elif 'From:' in line:
                 header['planner'] = line.split('From:')[1].strip()
             elif 'Date:' in line:
-                header['date'] = line.split('Date:')[1].strip()
+                date_str = line.split('Date:')[1].strip()
+                # Convert to yyyy-mm-dd format
+                header['date'] = self.format_date_to_iso(date_str)
             elif 'Ref:' in line:
                 header['ref'] = line.split('Ref:')[1].strip()
                 
