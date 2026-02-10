@@ -122,6 +122,14 @@ async function convertPDF() {
 
         updateProgress(80, 'CSV 생성 중...');
 
+        // Check if any data was extracted
+        if (items.length === 0) {
+            console.warn('No items extracted from PDF');
+            throw new Error('PDF에서 데이터를 추출할 수 없습니다. 파일이 올바른 견적서 형식인지 확인해주세요.\n\n데스크톱 버전(converter.py)을 사용하면 더 정확한 변환이 가능합니다.');
+        }
+
+        console.log(`Total items extracted: ${items.length}`);
+
         // Convert to CSV
         const csv = generateCSV(headerInfo, items, nreItems);
 
@@ -178,46 +186,154 @@ function extractHeaderInfo(text) {
 async function extractTableData(page, textContent) {
     const items = [];
     
-    // This is a simplified version - in a real implementation, you would need
-    // to properly parse the table structure from the PDF
-    // For now, we'll extract basic text and try to identify products
+    // Group text items by vertical position (Y coordinate) to form rows
+    const rowMap = new Map();
+    const tolerance = 3; // Y-coordinate tolerance for grouping items in same row
     
-    const text = textContent.items.map(item => item.str).join('\n');
-    const lines = text.split('\n').filter(line => line.trim());
+    // Organize text items by row (Y position)
+    for (const item of textContent.items) {
+        const y = Math.round(item.transform[5] / tolerance) * tolerance;
+        if (!rowMap.has(y)) {
+            rowMap.set(y, []);
+        }
+        rowMap.get(y).push({
+            text: item.str.trim(),
+            x: item.transform[4],
+            y: item.transform[5]
+        });
+    }
     
-    // Look for table-like patterns
-    // This is a basic implementation - you may need to adjust based on actual PDF structure
-    let currentItem = null;
+    // Sort rows by Y position (top to bottom)
+    const rows = Array.from(rowMap.entries())
+        .sort((a, b) => b[0] - a[0])
+        .map(([y, items]) => {
+            // Sort items in each row by X position (left to right)
+            return items.sort((a, b) => a.x - b.x);
+        });
     
-    for (let i = 0; i < lines.length; i++) {
-        const line = lines[i].trim();
-        
-        // Skip empty lines
-        if (!line) continue;
-        
-        // Try to identify rows with product information
-        // This is highly dependent on the PDF structure
-        if (line.match(/^\d+\s+/)) {
-            // Looks like an item number
-            if (currentItem) {
-                items.push(currentItem);
-            }
-            currentItem = {
-                item: line.split(/\s+/)[0],
-                product: '',
-                delivery_term: '',
-                moq: '',
-                price: '',
-                lt: '',
-                remark: ''
-            };
+    // Find header row containing "Product" and "MOQ"
+    let headerRowIndex = -1;
+    let headerRow = null;
+    
+    for (let i = 0; i < rows.length; i++) {
+        const rowText = rows[i].map(item => item.text).join(' ');
+        if (rowText.includes('Product') && rowText.includes('MOQ')) {
+            headerRowIndex = i;
+            headerRow = rows[i];
+            break;
         }
     }
     
-    if (currentItem) {
-        items.push(currentItem);
+    if (headerRowIndex === -1) {
+        console.log('No table header found with Product and MOQ columns');
+        return items;
     }
     
+    // Determine column boundaries based on header
+    const columns = {
+        item: null,
+        product: null,
+        delivery_term: null,
+        moq: null,
+        price: null,
+        lt: null,
+        remark: null
+    };
+    
+    // Map header text to column positions
+    for (let i = 0; i < headerRow.length; i++) {
+        const text = headerRow[i].text.toLowerCase();
+        const x = headerRow[i].x;
+        
+        if (text.includes('item') && !columns.item) {
+            columns.item = { index: i, x: x, text: headerRow[i].text };
+        } else if (text.includes('product')) {
+            columns.product = { index: i, x: x, text: headerRow[i].text };
+        } else if (text.includes('delivery')) {
+            columns.delivery_term = { index: i, x: x, text: headerRow[i].text };
+        } else if (text.includes('moq')) {
+            columns.moq = { index: i, x: x, text: headerRow[i].text };
+        } else if (text.includes('price')) {
+            columns.price = { index: i, x: x, text: headerRow[i].text };
+        } else if (text.includes('l/t')) {
+            columns.lt = { index: i, x: x, text: headerRow[i].text };
+        } else if (text.includes('remark')) {
+            columns.remark = { index: i, x: x, text: headerRow[i].text };
+        }
+    }
+    
+    console.log('Detected columns:', columns);
+    
+    // Extract data rows (after header)
+    let currentItem = null;
+    let currentProduct = '';
+    let currentDelivery = '';
+    
+    for (let i = headerRowIndex + 1; i < rows.length; i++) {
+        const row = rows[i];
+        if (row.length === 0) continue;
+        
+        // Build row data by mapping to columns
+        const rowData = {
+            item: '',
+            product: '',
+            delivery_term: '',
+            moq: '',
+            price: '',
+            lt: '',
+            remark: ''
+        };
+        
+        // Assign text items to columns based on X position
+        for (const textItem of row) {
+            const x = textItem.x;
+            const text = textItem.text;
+            
+            // Find which column this text belongs to
+            let closestColumn = null;
+            let minDistance = Infinity;
+            
+            for (const [colName, colInfo] of Object.entries(columns)) {
+                if (colInfo && colInfo.x !== undefined) {
+                    const distance = Math.abs(x - colInfo.x);
+                    if (distance < minDistance && distance < 100) { // 100 point tolerance
+                        minDistance = distance;
+                        closestColumn = colName;
+                    }
+                }
+            }
+            
+            if (closestColumn) {
+                rowData[closestColumn] += (rowData[closestColumn] ? ' ' : '') + text;
+            }
+        }
+        
+        // Update current values for merged cells
+        if (rowData.item && rowData.item.trim()) {
+            currentItem = rowData.item.trim();
+        }
+        if (rowData.product && rowData.product.trim()) {
+            currentProduct = rowData.product.trim();
+        }
+        if (rowData.delivery_term && rowData.delivery_term.trim()) {
+            currentDelivery = rowData.delivery_term.trim();
+        }
+        
+        // Only add row if it has MOQ data (indicates a complete row)
+        if (rowData.moq && rowData.moq.trim()) {
+            items.push({
+                item: currentItem || '',
+                product: currentProduct || rowData.product || '',
+                delivery_term: currentDelivery || rowData.delivery_term || '',
+                moq: rowData.moq.trim(),
+                price: rowData.price.trim(),
+                lt: rowData.lt.trim(),
+                remark: rowData.remark.trim()
+            });
+        }
+    }
+    
+    console.log('Extracted items:', items);
     return items;
 }
 
