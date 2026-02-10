@@ -301,7 +301,7 @@ class QuotationConverter:
         
         return nre_items
     
-    def convert(self) -> pd.DataFrame:
+    def convert(self, verbose=False) -> pd.DataFrame:
         """Main conversion function"""
         with pdfplumber.open(self.pdf_path) as pdf:
             for page in pdf.pages:
@@ -311,10 +311,14 @@ class QuotationConverter:
                 
                 # Extract table data
                 items = self.extract_table_data(page)
+                if verbose:
+                    print(f"📄 Page {page.page_number}: Extracted {len(items)} quotation items")
                 self.items.extend(items)
                 
                 # Extract NRE List
                 nre_items = self.extract_nre_list(page)
+                if verbose and nre_items:
+                    print(f"📄 Page {page.page_number}: Extracted {len(nre_items)} NRE items")
                 self.nre_items.extend(nre_items)
         
         # Convert to CSV format
@@ -370,26 +374,42 @@ class QuotationConverter:
         
         return df
     
-    def save_to_csv(self, output_path: str):
+    def save_to_csv(self, output_path: str, verbose=False):
         """Convert PDF and save to CSV"""
-        df = self.convert()
+        df = self.convert(verbose=verbose)
         df.to_csv(output_path, index=False, encoding='utf-8-sig')
         print(f"✅ Conversion complete: {output_path}")
         print(f"📊 Total rows: {len(df)}")
+        
+        if verbose:
+            # Check for blank L/T values
+            blank_lt = df[df['L/T'].isna() | (df['L/T'] == '')]
+            if len(blank_lt) > 0:
+                print(f"⚠️  Warning: {len(blank_lt)} rows have blank L/T")
+            else:
+                print(f"✅ All L/T values filled")
+            
+            # Show distribution
+            print(f"\n📊 Data summary:")
+            print(f"   - 6M items: {len(df[df['Cable Length'] == '6M'])}")
+            print(f"   - 7.62M items: {len(df[df['Cable Length'] == '7.62M'])}")
+            print(f"   - NRE items: {len(df[df['Delivery Term'] == 'NRE List'])}")
 
 
 def main():
     if len(sys.argv) < 3:
-        print("Usage: python converter.py <input_pdf> <output_csv>")
+        print("Usage: python converter.py <input_pdf> <output_csv> [-v|--verbose]")
         print("Example: python converter.py quotation.pdf output.csv")
+        print("Example: python converter.py quotation.pdf output.csv --verbose")
         sys.exit(1)
     
     input_pdf = sys.argv[1]
     output_csv = sys.argv[2]
+    verbose = len(sys.argv) > 3 and sys.argv[3] in ['-v', '--verbose']
     
     try:
         converter = QuotationConverter(input_pdf)
-        converter.save_to_csv(output_csv)
+        converter.save_to_csv(output_csv, verbose=verbose)
     except Exception as e:
         print(f"❌ Error: {e}")
         import traceback
