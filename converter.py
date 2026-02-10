@@ -103,38 +103,76 @@ class QuotationConverter:
         
         items = []
         main_table = None
+        has_header = False
         
         # Find main table (has columns: Item, Product, Delivery Term, MOQ, Unit Price, L/T, Remark)
         for table in tables:
             if table and len(table) > 0:
                 header_row = table[0]
-                if 'Product' in str(header_row) and 'MOQ' in str(header_row):
+                header_str = str(header_row)
+                
+                # Check if it's a proper header row
+                if 'Product' in header_str and 'MOQ' in header_str:
                     main_table = table
+                    has_header = True
                     break
+                
+                # Check if it's a continuation table (no header but has quotation data)
+                # Heuristic: 7 columns, has price with $, numeric MOQ
+                if len(table[0]) == 7:
+                    # Check if looks like quotation data (has $ in price column)
+                    first_row = table[0]
+                    # Check if column 4 (price) has $ and column 3 (MOQ) is numeric-like
+                    has_price = any('$' in str(cell) for cell in first_row if cell)
+                    has_numeric = any(str(cell).replace(',', '').replace('.', '').isdigit() 
+                                     for cell in first_row if cell and str(cell).strip())
+                    
+                    if has_price and has_numeric:
+                        main_table = table
+                        has_header = False
+                        break
         
         if not main_table:
             return []
         
         # Find column indices
-        header = main_table[0]
         col_indices = {}
-        for i, cell in enumerate(header):
-            if cell:
-                cell_lower = str(cell).lower().strip()
-                if 'item' in cell_lower:
-                    col_indices['item'] = i
-                elif 'product' in cell_lower:
-                    col_indices['product'] = i
-                elif 'delivery' in cell_lower:
-                    col_indices['delivery_term'] = i
-                elif 'moq' in cell_lower:
-                    col_indices['moq'] = i
-                elif 'unit price' in cell_lower or 'price' in cell_lower:
-                    col_indices['price'] = i
-                elif 'l/t' in cell_lower:
-                    col_indices['lt'] = i
-                elif 'remark' in cell_lower:
-                    col_indices['remark'] = i
+        start_row = 0
+        
+        if has_header:
+            # Parse header to find column indices
+            header = main_table[0]
+            for i, cell in enumerate(header):
+                if cell:
+                    cell_lower = str(cell).lower().strip()
+                    if 'item' in cell_lower:
+                        col_indices['item'] = i
+                    elif 'product' in cell_lower:
+                        col_indices['product'] = i
+                    elif 'delivery' in cell_lower:
+                        col_indices['delivery_term'] = i
+                    elif 'moq' in cell_lower:
+                        col_indices['moq'] = i
+                    elif 'unit price' in cell_lower or 'price' in cell_lower:
+                        col_indices['price'] = i
+                    elif 'l/t' in cell_lower:
+                        col_indices['lt'] = i
+                    elif 'remark' in cell_lower:
+                        col_indices['remark'] = i
+            start_row = 1
+        else:
+            # Continuation table without header - assume standard column order
+            # Item, Product, Delivery Term, MOQ, Unit Price, L/T, Remark
+            col_indices = {
+                'item': 0,
+                'product': 1,
+                'delivery_term': 2,
+                'moq': 3,
+                'price': 4,
+                'lt': 5,
+                'remark': 6
+            }
+            start_row = 0
         
         # Parse data rows
         current_item = None
@@ -144,7 +182,7 @@ class QuotationConverter:
         current_lt = ''
         current_remark = ''
         
-        for row in main_table[1:]:
+        for row in main_table[start_row:]:
             if not row or all(cell is None or str(cell).strip() == '' for cell in row):
                 continue
             
@@ -299,7 +337,7 @@ class QuotationConverter:
                 'Rated Current': rated_current,
                 'Cable Length': cable_length,
                 'Description': description,
-                'Delivery Term': item['delivery_term'],
+                'Delivery Term': item['delivery_term'].replace('\n', ' '),
                 'MOQ': qty_value,
                 'Price': item['price'],
                 'L/T': item['lt'],
