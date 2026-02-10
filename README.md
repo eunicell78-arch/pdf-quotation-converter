@@ -1,8 +1,49 @@
-# PDF Quotation Converter
+# Saju & PDF Quotation Converter
+
+동양의 사주팔자 만세력 계산기 및 PDF 견적서 변환 프로그램
+
+## 🔮 사주팔자 만세력 계산기
+
+Streamlit을 사용한 웹 기반 사주팔자 계산기입니다.
+
+### 주요 기능
+
+- ✅ 정확한 사주팔자 계산 (1900-2100년)
+- ✅ 음력/양력 자동 변환
+- ✅ 태양시 보정 지원
+- ✅ 절기 시간 정확히 반영
+- ✅ 조자시/야자시 처리
+- ✅ 오행 분석 및 시각화
+- ✅ 웹 UI로 쉬운 사용
+
+### 사용 방법
+
+```bash
+# 앱 실행
+streamlit run app.py
+```
+
+웹 브라우저에서 http://localhost:8501 에 접속하여 사용할 수 있습니다.
+
+### Streamlit Cloud 배포
+
+1. [Streamlit Cloud](https://streamlit.io/cloud)에 접속
+2. GitHub 저장소 연결
+3. `app.py` 파일 선택
+4. Deploy 클릭
+
+### 참고 라이브러리
+
+- [@0ssw1/sajupy](https://github.com/0ssw1/sajupy) - 사주팔자 계산 Python 라이브러리
+- [@yhj1024/manseryeok](https://github.com/yhj1024/manseryeok) - 만세력 계산 참고
+
+---
+
+## 📄 PDF Quotation Converter
 
 PDF 견적서를 CSV 파일로 자동 변환하는 Python 프로그램
 
-## 📋 주요 기능
+## 📋 주요 기능 (PDF Converter)
 
 - PDF 견적서 자동 파싱
 - Product 필드를 Rated Current, Cable Length, Description으로 자동 분리
