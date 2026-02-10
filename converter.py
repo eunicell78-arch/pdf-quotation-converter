@@ -118,14 +118,18 @@ class QuotationConverter:
                     break
                 
                 # Check if it's a continuation table (no header but has quotation data)
-                # Heuristic: 7 columns, has price with $, numeric MOQ
-                if len(table[0]) == 7:
+                # Heuristic: 6-8 columns (flexible), has price with $, numeric MOQ
+                if 6 <= len(table[0]) <= 8:
                     # Check if looks like quotation data (has $ in price column)
                     first_row = table[0]
                     # Check if column 4 (price) has $ and column 3 (MOQ) is numeric-like
                     has_price = any('$' in str(cell) for cell in first_row if cell)
-                    has_numeric = any(str(cell).replace(',', '').replace('.', '').isdigit() 
-                                     for cell in first_row if cell and str(cell).strip())
+                    # Improved numeric detection - check non-empty after cleanup
+                    has_numeric = any(
+                        len(str(cell).replace(',', '').replace('.', '').strip()) > 0 and
+                        str(cell).replace(',', '').replace('.', '').strip().isdigit()
+                        for cell in first_row if cell and str(cell).strip()
+                    )
                     
                     if has_price and has_numeric:
                         main_table = table
