@@ -6,7 +6,17 @@ PDF 견적서를 CSV 파일로 자동 변환하는 Python 프로그램
 
 ## 🌟 **NEW! Streamlit 웹 앱** (가장 쉽고 정확한 방법!)
 
-### 🚀 빠른 시작
+### 🌐 웹에서 바로 사용하고 싶으신가요?
+
+**👉 [웹배포 초간단 가이드](웹배포_초간단가이드.md) 보기!** 👈
+
+**5분이면 웹 배포 완료!** Streamlit Cloud에 배포하면:
+- ✅ **웹 브라우저에서 바로 접속** (Chrome, Safari, Firefox 등)
+- ✅ **URL 공유** → 다른 사람도 사용 가능
+- ✅ **설치 불필요** → Python 몰라도 됨
+- ✅ **무료!** → 비용 0원
+
+### 🚀 로컬에서 실행 (개발자용)
 
 ```bash
 streamlit run streamlit_app.py
@@ -22,11 +32,12 @@ streamlit run streamlit_app.py
 - ✅ **CSV & Excel**: 두 가지 형식으로 다운로드
 - ✅ **무료 배포**: Streamlit Cloud에 무료 호스팅 가능
 
-### 📦 Streamlit Cloud 배포 (무료!)
+### 📦 웹 배포 가이드
 
-자세한 내용: [STREAMLIT_배포.md](STREAMLIT_배포.md)
+- 🆕 **[웹배포 초간단 가이드](웹배포_초간단가이드.md)** ← 이거 먼저 보세요!
+- 📖 [STREAMLIT_배포.md](STREAMLIT_배포.md) ← 상세 가이드
 
-**1-Click 배포:** https://streamlit.io/cloud → 저장소 연결 → 자동 배포!
+**배포 링크:** https://share.streamlit.io (GitHub 계정으로 로그인 → 저장소 연결 → Deploy!)
 
 ---
 
