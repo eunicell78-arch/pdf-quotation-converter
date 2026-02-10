@@ -186,22 +186,30 @@ function extractHeaderInfo(text) {
 async function extractTableData(page, textContent) {
     const items = [];
     
+    console.log('=== Starting table extraction ===');
+    console.log('Total text items:', textContent.items.length);
+    
     // Group text items by vertical position (Y coordinate) to form rows
     const rowMap = new Map();
-    const tolerance = 3; // Y-coordinate tolerance for grouping items in same row
+    const yTolerance = 5; // Increased tolerance for grouping items in same row
     
     // Organize text items by row (Y position)
     for (const item of textContent.items) {
-        const y = Math.round(item.transform[5] / tolerance) * tolerance;
+        if (!item.str || item.str.trim() === '') continue; // Skip empty items
+        
+        const y = Math.round(item.transform[5] / yTolerance) * yTolerance;
         if (!rowMap.has(y)) {
             rowMap.set(y, []);
         }
         rowMap.get(y).push({
             text: item.str.trim(),
             x: item.transform[4],
-            y: item.transform[5]
+            y: item.transform[5],
+            width: item.width
         });
     }
+    
+    console.log('Grouped into', rowMap.size, 'rows');
     
     // Sort rows by Y position (top to bottom)
     const rows = Array.from(rowMap.entries())
@@ -211,21 +219,26 @@ async function extractTableData(page, textContent) {
             return items.sort((a, b) => a.x - b.x);
         });
     
-    // Find header row containing "Product" and "MOQ"
+    // Find header row containing "Product" and "MOQ" (case-insensitive)
     let headerRowIndex = -1;
     let headerRow = null;
     
     for (let i = 0; i < rows.length; i++) {
-        const rowText = rows[i].map(item => item.text).join(' ');
-        if (rowText.includes('Product') && rowText.includes('MOQ')) {
+        const rowText = rows[i].map(item => item.text).join(' ').toLowerCase();
+        if (rowText.includes('product') && rowText.includes('moq')) {
             headerRowIndex = i;
             headerRow = rows[i];
+            console.log('Found header at row', i, ':', rows[i].map(item => item.text).join(' | '));
             break;
         }
     }
     
     if (headerRowIndex === -1) {
-        console.log('No table header found with Product and MOQ columns');
+        console.warn('❌ No table header found with Product and MOQ columns');
+        console.log('First 5 rows:');
+        for (let i = 0; i < Math.min(5, rows.length); i++) {
+            console.log(`Row ${i}:`, rows[i].map(item => item.text).join(' | '));
+        }
         return items;
     }
     
@@ -253,16 +266,16 @@ async function extractTableData(page, textContent) {
             columns.delivery_term = { index: i, x: x, text: headerRow[i].text };
         } else if (text.includes('moq')) {
             columns.moq = { index: i, x: x, text: headerRow[i].text };
-        } else if (text.includes('price')) {
+        } else if (text.includes('price') || text.includes('unit')) {
             columns.price = { index: i, x: x, text: headerRow[i].text };
-        } else if (text.includes('l/t')) {
+        } else if (text.includes('l/t') || text.includes('lead')) {
             columns.lt = { index: i, x: x, text: headerRow[i].text };
-        } else if (text.includes('remark')) {
+        } else if (text.includes('remark') || text.includes('note')) {
             columns.remark = { index: i, x: x, text: headerRow[i].text };
         }
     }
     
-    console.log('Detected columns:', columns);
+    console.log('✅ Detected columns:', JSON.stringify(columns, null, 2));
     
     // Extract data rows (after header)
     let currentItem = null;
