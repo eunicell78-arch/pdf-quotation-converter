@@ -41,12 +41,31 @@ streamlit run app.py
 
 ### Streamlit Cloud 배포
 
+#### 🚀 빠른 배포 (권장)
+
+[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://share.streamlit.io/)
+
 1. [Streamlit Cloud](https://streamlit.io/cloud)에 접속
 2. GitHub 저장소 연결 (Sign in with GitHub)
 3. "New app" 클릭
-4. Repository: `eunicell78-arch/pdf-quotation-converter` 선택
-5. Main file path: `app.py` 입력
-6. Deploy 클릭
+4. 배포 설정:
+   - **Repository**: `eunicell78-arch/pdf-quotation-converter`
+   - **Branch**: `copilot/add-manseong-calculation-app` (또는 main)
+   - **Main file path**: `app.py`
+5. "Deploy!" 클릭
+
+배포 후 자동으로 생성된 URL로 어디서든 접속 가능합니다! 🎉
+
+#### 📋 배포 요구사항
+
+이 저장소는 Streamlit Cloud 배포를 위해 다음 파일들을 포함하고 있습니다:
+
+- ✅ `requirements.txt` - Python 패키지 의존성
+- ✅ `.streamlit/config.toml` - Streamlit 설정
+- ✅ `.python-version` - Python 버전 명시 (3.12)
+- ✅ `app.py` - 메인 애플리케이션
+
+모든 설정이 완료되어 있어 별도 설정 없이 바로 배포 가능합니다!
 
 ---
 
@@ -85,6 +104,7 @@ pdf-quotation-converter/
 ├── app.py                # 사주팔자 만세력 계산기 (Streamlit 웹앱)
 ├── converter.py          # PDF 견적서 변환 프로그램
 ├── requirements.txt      # 필요한 패키지 목록
+├── .python-version       # Python 버전 (Streamlit Cloud용)
 ├── .streamlit/
 │   └── config.toml       # Streamlit 설정
 ├── samples/             # 샘플 파일 폴더
