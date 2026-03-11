@@ -7,6 +7,7 @@ Streamlit Web App for PDF Quotation to CSV Converter
 import streamlit as st
 import pandas as pd
 import io
+import traceback
 from converter import QuotationConverter
 
 # 페이지 설정
@@ -203,11 +204,14 @@ if uploaded_file is not None:
             st.metric("파일 크기", f"{len(csv_content) / 1024:.1f} KB")
         
     except Exception as e:
-        st.markdown(f'<div class="error-box">❌ 오류 발생: {str(e)}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="error-box">❌ 오류 발생: {type(e).__name__}: {str(e)}</div>', unsafe_allow_html=True)
         st.error("변환 중 문제가 발생했습니다. PDF 파일이 올바른 견적서 형식인지 확인해주세요.")
         
         with st.expander("🔍 오류 상세 정보"):
-            st.code(str(e))
+            tb = traceback.format_exc()
+            if not tb or tb.strip() == "NoneType: None":
+                tb = "No traceback captured. Current stack:\n" + "".join(traceback.format_stack())
+            st.code(tb)
             
         st.markdown("""
         ### 💡 문제 해결 팁:

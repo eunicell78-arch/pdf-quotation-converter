@@ -12,6 +12,21 @@ from typing import Dict, List, Tuple, Optional
 from datetime import datetime
 
 
+def safe_get(row, idx, default='', verbose=False):
+    """Safely retrieve row[idx], returning default when idx is out of bounds.
+
+    Negative indices are intentionally not supported to avoid silent
+    mis-indexing when a row is shorter than expected.
+    """
+    if row is None or idx is None:
+        return default
+    if not (0 <= idx < len(row)):
+        if verbose:
+            print(f"⚠️  safe_get: index {idx} out of range for row of length {len(row)}, using default {default!r}")
+        return default
+    return row[idx]
+
+
 class QuotationConverter:
     def __init__(self, pdf_path: str):
         self.pdf_path = pdf_path
@@ -123,7 +138,7 @@ class QuotationConverter:
         
         return product_name, rated_current, cable_length, description
     
-    def extract_table_data(self, page) -> List[Dict]:
+    def extract_table_data(self, page, verbose=False) -> List[Dict]:
         """Extract main quotation table data"""
         tables = page.extract_tables()
         
@@ -219,13 +234,13 @@ class QuotationConverter:
             if not row or all(cell is None or str(cell).strip() == '' for cell in row):
                 continue
             
-            item_num = row[col_indices.get('item', 0)] if 'item' in col_indices else ''
-            product = row[col_indices.get('product', 1)] if 'product' in col_indices else ''
-            delivery = row[col_indices.get('delivery_term', 2)] if 'delivery_term' in col_indices else ''
-            moq = row[col_indices.get('moq', 3)] if 'moq' in col_indices else ''
-            price = row[col_indices.get('price', 4)] if 'price' in col_indices else ''
-            lt = row[col_indices.get('lt', 5)] if 'lt' in col_indices else ''
-            remark = row[col_indices.get('remark', 6)] if 'remark' in col_indices else ''
+            item_num = safe_get(row, col_indices.get('item', 0), verbose=verbose) if 'item' in col_indices else ''
+            product = safe_get(row, col_indices.get('product', 1), verbose=verbose) if 'product' in col_indices else ''
+            delivery = safe_get(row, col_indices.get('delivery_term', 2), verbose=verbose) if 'delivery_term' in col_indices else ''
+            moq = safe_get(row, col_indices.get('moq', 3), verbose=verbose) if 'moq' in col_indices else ''
+            price = safe_get(row, col_indices.get('price', 4), verbose=verbose) if 'price' in col_indices else ''
+            lt = safe_get(row, col_indices.get('lt', 5), verbose=verbose) if 'lt' in col_indices else ''
+            remark = safe_get(row, col_indices.get('remark', 6), verbose=verbose) if 'remark' in col_indices else ''
             
             # Update current values if not empty (for merged cells)
             if item_num and str(item_num).strip():
@@ -255,7 +270,7 @@ class QuotationConverter:
         
         return items
     
-    def extract_nre_list(self, page) -> List[Dict]:
+    def extract_nre_list(self, page, verbose=False) -> List[Dict]:
         """Extract NRE List items
         Requirements:
         - Product = Description field
@@ -303,12 +318,12 @@ class QuotationConverter:
                         if not row or all(cell is None or str(cell).strip() == '' for cell in row):
                             continue
                         
-                        description = row[col_indices.get('description', 0)] if 'description' in col_indices else ''
-                        cavity = row[col_indices.get('cavity', 1)] if 'cavity' in col_indices else ''
-                        qty = row[col_indices.get('qty', 2)] if 'qty' in col_indices else ''
-                        unit_price = row[col_indices.get('unit_price', 3)] if 'unit_price' in col_indices else ''
-                        lt = row[col_indices.get('lt', -2)] if 'lt' in col_indices else ''
-                        remark = row[col_indices.get('remark', -1)] if 'remark' in col_indices else ''
+                        description = safe_get(row, col_indices.get('description', 0), verbose=verbose) if 'description' in col_indices else ''
+                        cavity = safe_get(row, col_indices.get('cavity', 1), verbose=verbose) if 'cavity' in col_indices else ''
+                        qty = safe_get(row, col_indices.get('qty', 2), verbose=verbose) if 'qty' in col_indices else ''
+                        unit_price = safe_get(row, col_indices.get('unit_price', 3), verbose=verbose) if 'unit_price' in col_indices else ''
+                        lt = safe_get(row, col_indices.get('lt', 4), verbose=verbose) if 'lt' in col_indices else ''
+                        remark = safe_get(row, col_indices.get('remark', 5), verbose=verbose) if 'remark' in col_indices else ''
                         
                         # Only add if description exists
                         if description and str(description).strip():
@@ -327,8 +342,6 @@ class QuotationConverter:
                             })
         
         return nre_items
-        
-        return nre_items
     
     def convert(self, verbose=False) -> pd.DataFrame:
         """Main conversion function"""
@@ -339,13 +352,13 @@ class QuotationConverter:
                     self.header_info = self.extract_header_info(page)
                 
                 # Extract table data
-                items = self.extract_table_data(page)
+                items = self.extract_table_data(page, verbose=verbose)
                 if verbose:
                     print(f"📄 Page {page.page_number}: Extracted {len(items)} quotation items")
                 self.items.extend(items)
                 
                 # Extract NRE List
-                nre_items = self.extract_nre_list(page)
+                nre_items = self.extract_nre_list(page, verbose=verbose)
                 if verbose and nre_items:
                     print(f"📄 Page {page.page_number}: Extracted {len(nre_items)} NRE items")
                 self.nre_items.extend(nre_items)
