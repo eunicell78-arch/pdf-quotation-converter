@@ -11,6 +11,9 @@ import sys
 from typing import Dict, List, Tuple, Optional
 from datetime import datetime
 
+# Pre-compiled regex for the "From:" header marker (handles "From :" variants, case-insensitive)
+_FROM_PATTERN = re.compile(r'From\s*:', re.IGNORECASE)
+
 
 def safe_get(row, idx, default='', verbose=False):
     """Safely retrieve row[idx], returning default when idx is out of bounds.
@@ -65,12 +68,22 @@ class QuotationConverter:
         text = page.extract_text()
         lines = text.split('\n')
         
+        # Regex that matches "From" followed by optional space and colon, case-insensitively
+        from_pattern = _FROM_PATTERN
+
         header = {}
         for line in lines:
             if line.startswith('To:'):
-                header['customer'] = line.replace('To:', '').strip()
-            elif 'From:' in line:
-                header['planner'] = line.split('From:')[1].strip()
+                rest = line[len('To:'):].strip()
+                m = from_pattern.search(rest)
+                if m:
+                    # Both To: and From: are on the same line
+                    header['customer'] = rest[:m.start()].strip()
+                    header['planner'] = rest[m.end():].strip()
+                else:
+                    header['customer'] = rest
+            elif from_pattern.search(line):
+                header['planner'] = from_pattern.split(line, maxsplit=1)[1].strip()
             elif 'Date:' in line:
                 date_str = line.split('Date:')[1].strip()
                 # Convert to yyyy-mm-dd format
