@@ -11,6 +11,9 @@ import sys
 from typing import Dict, List, Tuple, Optional
 from datetime import datetime
 
+LT_UNIT_PATTERN = re.compile(r'(?:wk|wks|week|weeks)\b', re.IGNORECASE)
+HAS_DIGIT_PATTERN = re.compile(r'\d')
+
 
 def safe_get(row, idx, default='', verbose=False):
     """Safely retrieve row[idx], returning default when idx is out of bounds.
@@ -25,6 +28,24 @@ def safe_get(row, idx, default='', verbose=False):
             print(f"⚠️  safe_get: index {idx} out of range for row of length {len(row)}, using default {default!r}")
         return default
     return row[idx]
+
+
+def normalize_lt_value(lt_value: str) -> str:
+    """Normalize lead-time strings to include a wks suffix for numeric values."""
+    if lt_value is None:
+        return ''
+
+    normalized = str(lt_value).strip()
+    if not normalized:
+        return ''
+
+    if LT_UNIT_PATTERN.search(normalized):
+        return normalized
+
+    if HAS_DIGIT_PATTERN.search(normalized):
+        return f"{normalized}wks"
+
+    return normalized
 
 
 class QuotationConverter:
@@ -390,7 +411,7 @@ class QuotationConverter:
                 'Delivery Term': item['delivery_term'].replace('\n', ' '),
                 'MOQ': qty_value,
                 'Price': item['price'],
-                'L/T': item['lt'],
+                'L/T': normalize_lt_value(item['lt']),
                 'Remark': remark
             })
         
@@ -407,7 +428,7 @@ class QuotationConverter:
                 'Delivery Term': 'NRE List',  # Fixed value
                 'MOQ': nre_item['qty'],  # MOQ = Qty
                 'Price': nre_item['price'],  # Unit Price only
-                'L/T': nre_item['lt'],
+                'L/T': normalize_lt_value(nre_item['lt']),
                 'Remark': nre_item['remark']
             })
         

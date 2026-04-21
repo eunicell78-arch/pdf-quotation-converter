@@ -10,7 +10,7 @@ import os
 # Ensure the project root is on the path
 sys.path.insert(0, os.path.dirname(__file__))
 
-from converter import safe_get
+from converter import normalize_lt_value, safe_get
 
 
 def test_safe_get():
@@ -47,5 +47,23 @@ def test_safe_get():
     print("✅ All safe_get tests passed.")
 
 
+def test_normalize_lt_value():
+    assert normalize_lt_value('4') == '4wks', "single numeric value should get wks suffix"
+    assert normalize_lt_value('10') == '10wks', "single numeric value should get wks suffix"
+    assert normalize_lt_value('4-6') == '4-6wks', "numeric range should get wks suffix"
+    assert normalize_lt_value('8-10') == '8-10wks', "numeric range should get wks suffix"
+    assert normalize_lt_value('4-6wks') == '4-6wks', "existing wks suffix should be kept"
+    assert normalize_lt_value('4WKS') == '4WKS', "uppercase WKS suffix should be kept"
+    assert normalize_lt_value('6 Wks') == '6 Wks', "mixed-case Wks suffix should be kept"
+    assert normalize_lt_value('6 wk') == '6 wk', "existing wk suffix should be kept"
+    assert normalize_lt_value('2 weeks') == '2 weeks', "existing week suffix should be kept"
+    assert normalize_lt_value('3 WEEKS') == '3 WEEKS', "uppercase WEEKS suffix should be kept"
+    assert normalize_lt_value('TBD') == 'TBD', "non-numeric values should be unchanged"
+    assert normalize_lt_value('') == '', "empty values should remain empty"
+    assert normalize_lt_value(None) == '', "None should normalize to empty string"
+    print("✅ All normalize_lt_value tests passed.")
+
+
 if __name__ == '__main__':
     test_safe_get()
+    test_normalize_lt_value()
