@@ -139,7 +139,7 @@ with col2:
 if uploaded_files:
     uploaded_file_map = {uploaded_file.name: uploaded_file for uploaded_file in uploaded_files}
     selected_file_names = st.multiselect(
-        "변환할 파일 선택",
+        "📄 변환할 파일 선택",
         options=list(uploaded_file_map.keys()),
         default=list(uploaded_file_map.keys())
     )
@@ -147,20 +147,20 @@ if uploaded_files:
     action_col1, action_col2, action_col3 = st.columns([1, 1, 1])
     with action_col1:
         run_convert = st.button(
-            "변환",
+            "🔄 변환",
             type="primary",
             use_container_width=True,
             disabled=not selected_file_names
         )
     with action_col2:
         run_save = st.button(
-            "저장",
+            "💾 저장",
             use_container_width=True,
             disabled=not st.session_state.pending_conversions
         )
     with action_col3:
         run_clear_preview = st.button(
-            "미리보기 비우기",
+            "🧹 미리보기 비우기",
             use_container_width=True,
             disabled=not (st.session_state.pending_conversions or st.session_state.pending_errors)
         )
@@ -319,7 +319,7 @@ if saved_conversions:
     with action_col1:
         combined_filename = f"quotations_{datetime.now().strftime('%Y%m%d_%H%M')}.csv"
         st.download_button(
-            label="전체 CSV 다운로드",
+            label="📥 전체 CSV 다운로드",
             data=combined_csv_buffer.getvalue(),
             file_name=combined_filename,
             mime='text/csv',
@@ -327,7 +327,7 @@ if saved_conversions:
         )
 
     with action_col2:
-        if st.button("저장 목록 비우기", use_container_width=True):
+        if st.button("🗑️ 저장 목록 비우기", use_container_width=True):
             st.session_state.saved_conversions = []
             if 'stats' in st.session_state:
                 del st.session_state.stats
