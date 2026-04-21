@@ -14,6 +14,8 @@ import tempfile
 from datetime import datetime
 from converter import QuotationConverter
 
+APP_BUILD_MARKER = "2026-04-21.save-rerun-lt"
+
 # 페이지 설정
 st.set_page_config(
     page_title="PDF 견적서 변환기",
@@ -61,6 +63,7 @@ st.markdown("""
 
 # 헤더
 st.markdown('<div class="main-header">📄 PDF 견적서 → CSV 변환기</div>', unsafe_allow_html=True)
+st.caption(f"Build: {APP_BUILD_MARKER}")
 
 
 def add_source_file_column(df, source_file):
@@ -76,6 +79,8 @@ if 'pending_conversions' not in st.session_state:
     st.session_state.pending_conversions = []
 if 'pending_errors' not in st.session_state:
     st.session_state.pending_errors = []
+if 'status_message' not in st.session_state:
+    st.session_state.status_message = None
 
 # 사이드바
 with st.sidebar:
@@ -111,6 +116,13 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("**버전:** 1.0.0")
     st.markdown("**엔진:** pdfplumber")
+
+if st.session_state.status_message:
+    st.markdown(
+        f'<div class="{st.session_state.status_message["type"]}-box">{st.session_state.status_message["text"]}</div>',
+        unsafe_allow_html=True
+    )
+    st.session_state.status_message = None
 
 # 메인 콘텐츠
 col1, col2 = st.columns([2, 1])
@@ -206,26 +218,33 @@ if uploaded_files:
                 {'source_file': file_name, 'error': file_error, 'trace': error_trace}
                 for file_name, file_error, error_trace in batch_errors
             ]
-
-        if batch_results:
-            extracted_rows = sum(len(result) for _, result in batch_results)
-            st.markdown(
-                f'<div class="success-box">✅ 변환 완료! {len(batch_results)}개 파일, '
-                f'{extracted_rows}개 항목이 미리보기에 반영되었습니다. 저장 버튼을 눌러 누적하세요.</div>',
-                unsafe_allow_html=True
+        extracted_rows = sum(len(result) for _, result in batch_results)
+        st.session_state.status_message = {
+            'type': 'success',
+            'text': (
+                f'✅ 변환 완료! {len(batch_results)}개 파일, {extracted_rows}개 항목이 '
+                '미리보기에 반영되었습니다. 저장 버튼을 눌러 누적하세요.'
             )
+        }
+        st.rerun()
     if run_save and st.session_state.pending_conversions:
         pending_count = len(st.session_state.pending_conversions)
         pending_rows = sum(len(item['result']) for item in st.session_state.pending_conversions)
         st.session_state.saved_conversions.extend(st.session_state.pending_conversions)
         st.session_state.pending_conversions = []
-        st.markdown(
-            f'<div class="success-box">✅ 저장 완료! {pending_count}개 파일, {pending_rows}개 항목이 하단 목록에 누적되었습니다.</div>',
-            unsafe_allow_html=True
-        )
+        st.session_state.status_message = {
+            'type': 'success',
+            'text': f'✅ 저장 완료! {pending_count}개 파일, {pending_rows}개 항목이 하단 목록에 누적되었습니다.'
+        }
+        st.rerun()
     if run_clear_preview:
         st.session_state.pending_conversions = []
         st.session_state.pending_errors = []
+        st.session_state.status_message = {
+            'type': 'info',
+            'text': 'ℹ️ 미리보기 목록을 비웠습니다.'
+        }
+        st.rerun()
 
     if st.session_state.pending_conversions:
         st.markdown("### 📋 변환 결과 미리보기 (저장 전)")

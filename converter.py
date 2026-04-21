@@ -27,6 +27,25 @@ def safe_get(row, idx, default='', verbose=False):
     return row[idx]
 
 
+def normalize_lt_value(lt_value: str) -> str:
+    """Normalize lead-time strings to include a wks suffix for numeric values."""
+    if lt_value is None:
+        return ''
+
+    normalized = str(lt_value).strip()
+    if not normalized:
+        return ''
+
+    lower = normalized.lower()
+    if re.search(r'(?:wk|wks|week|weeks)\b', lower):
+        return normalized
+
+    if re.search(r'\d', normalized):
+        return f"{normalized}wks"
+
+    return normalized
+
+
 class QuotationConverter:
     def __init__(self, pdf_path: str):
         self.pdf_path = pdf_path
@@ -390,7 +409,7 @@ class QuotationConverter:
                 'Delivery Term': item['delivery_term'].replace('\n', ' '),
                 'MOQ': qty_value,
                 'Price': item['price'],
-                'L/T': item['lt'],
+                'L/T': normalize_lt_value(item['lt']),
                 'Remark': remark
             })
         
@@ -407,7 +426,7 @@ class QuotationConverter:
                 'Delivery Term': 'NRE List',  # Fixed value
                 'MOQ': nre_item['qty'],  # MOQ = Qty
                 'Price': nre_item['price'],  # Unit Price only
-                'L/T': nre_item['lt'],
+                'L/T': normalize_lt_value(nre_item['lt']),
                 'Remark': nre_item['remark']
             })
         
