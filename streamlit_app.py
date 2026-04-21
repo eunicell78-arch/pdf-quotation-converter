@@ -144,7 +144,7 @@ if uploaded_files:
         default=list(uploaded_file_map.keys())
     )
 
-    action_col1, action_col2 = st.columns([1, 1])
+    action_col1, action_col2, action_col3 = st.columns([1, 1, 1])
     with action_col1:
         run_convert = st.button(
             "변환",
@@ -157,6 +157,12 @@ if uploaded_files:
             "저장",
             use_container_width=True,
             disabled=not st.session_state.pending_conversions
+        )
+    with action_col3:
+        run_clear_preview = st.button(
+            "미리보기 비우기",
+            use_container_width=True,
+            disabled=not (st.session_state.pending_conversions or st.session_state.pending_errors)
         )
 
     if run_convert:
@@ -213,11 +219,13 @@ if uploaded_files:
         pending_rows = sum(len(item['result']) for item in st.session_state.pending_conversions)
         st.session_state.saved_conversions.extend(st.session_state.pending_conversions)
         st.session_state.pending_conversions = []
-        st.session_state.pending_errors = []
         st.markdown(
             f'<div class="success-box">✅ 저장 완료! {pending_count}개 파일, {pending_rows}개 항목이 하단 목록에 누적되었습니다.</div>',
             unsafe_allow_html=True
         )
+    if run_clear_preview:
+        st.session_state.pending_conversions = []
+        st.session_state.pending_errors = []
 
     if st.session_state.pending_conversions:
         st.markdown("### 📋 변환 결과 미리보기 (저장 전)")
