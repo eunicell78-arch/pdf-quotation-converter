@@ -11,6 +11,9 @@ import sys
 from typing import Dict, List, Tuple, Optional
 from datetime import datetime
 
+LT_UNIT_PATTERN = re.compile(r'(?:wk|wks|week|weeks)\b', re.IGNORECASE)
+HAS_DIGIT_PATTERN = re.compile(r'\d')
+
 
 def safe_get(row, idx, default='', verbose=False):
     """Safely retrieve row[idx], returning default when idx is out of bounds.
@@ -36,11 +39,10 @@ def normalize_lt_value(lt_value: str) -> str:
     if not normalized:
         return ''
 
-    lower = normalized.lower()
-    if re.search(r'(?:wk|wks|week|weeks)\b', lower):
+    if LT_UNIT_PATTERN.search(normalized):
         return normalized
 
-    if re.search(r'\d', normalized):
+    if HAS_DIGIT_PATTERN.search(normalized):
         return f"{normalized}wks"
 
     return normalized

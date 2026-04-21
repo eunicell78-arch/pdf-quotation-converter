@@ -118,10 +118,14 @@ with st.sidebar:
     st.markdown("**엔진:** pdfplumber")
 
 if st.session_state.status_message:
-    st.markdown(
-        f'<div class="{st.session_state.status_message["type"]}-box">{st.session_state.status_message["text"]}</div>',
-        unsafe_allow_html=True
-    )
+    status_text = st.session_state.status_message["text"]
+    status_type = st.session_state.status_message["type"]
+    if status_type == "success":
+        st.success(status_text)
+    elif status_type == "error":
+        st.error(status_text)
+    else:
+        st.info(status_text)
     st.session_state.status_message = None
 
 # 메인 콘텐츠
@@ -218,14 +222,25 @@ if uploaded_files:
                 {'source_file': file_name, 'error': file_error, 'trace': error_trace}
                 for file_name, file_error, error_trace in batch_errors
             ]
-        extracted_rows = sum(len(result) for _, result in batch_results)
-        st.session_state.status_message = {
-            'type': 'success',
-            'text': (
-                f'✅ 변환 완료! {len(batch_results)}개 파일, {extracted_rows}개 항목이 '
-                '미리보기에 반영되었습니다. 저장 버튼을 눌러 누적하세요.'
-            )
-        }
+        if batch_results:
+            extracted_rows = sum(len(result) for _, result in batch_results)
+            st.session_state.status_message = {
+                'type': 'success',
+                'text': (
+                    f'✅ 변환 완료! {len(batch_results)}개 파일, {extracted_rows}개 항목이 '
+                    '미리보기에 반영되었습니다. 저장 버튼을 눌러 누적하세요.'
+                )
+            }
+        elif batch_errors:
+            st.session_state.status_message = {
+                'type': 'error',
+                'text': f'❌ 변환 실패: {len(batch_errors)}개 파일 처리 중 오류가 발생했습니다.'
+            }
+        else:
+            st.session_state.status_message = {
+                'type': 'info',
+                'text': 'ℹ️ 변환 결과가 없습니다.'
+            }
         st.rerun()
     if run_save and st.session_state.pending_conversions:
         pending_count = len(st.session_state.pending_conversions)
