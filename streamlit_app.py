@@ -7,7 +7,11 @@ Streamlit Web App for PDF Quotation to CSV Converter
 import streamlit as st
 import pandas as pd
 import io
+import os
+import time
 import traceback
+import tempfile
+from datetime import datetime
 from converter import QuotationConverter
 
 # 페이지 설정
@@ -58,6 +62,17 @@ st.markdown("""
 # 헤더
 st.markdown('<div class="main-header">📄 PDF 견적서 → CSV 변환기</div>', unsafe_allow_html=True)
 
+
+def add_source_file_column(df, source_file):
+    df_with_source = df.copy()
+    df_with_source['source_file'] = source_file
+    reordered_columns = [col for col in df_with_source.columns if col != 'source_file'] + ['source_file']
+    return df_with_source[reordered_columns]
+
+
+if 'saved_conversions' not in st.session_state:
+    st.session_state.saved_conversions = []
+
 # 사이드바
 with st.sidebar:
     st.header("ℹ️ 사용 방법")
@@ -99,9 +114,10 @@ with col1:
     st.markdown('<div class="info-box">💡 PDF 견적서 파일을 업로드하면 자동으로 CSV로 변환됩니다.</div>', unsafe_allow_html=True)
 
     # 파일 업로드
-    uploaded_file = st.file_uploader(
+    uploaded_files = st.file_uploader(
         "PDF 파일 선택",
         type=['pdf'],
+        accept_multiple_files=True,
         help="텍스트 기반 PDF 견적서를 업로드하세요 (스캔 이미지 PDF는 지원하지 않습니다)"
     )
 
@@ -109,114 +125,72 @@ with col2:
     st.markdown("### 📊 변환 통계")
     if 'stats' in st.session_state:
         st.metric("변환된 항목", st.session_state.stats['items'])
+        st.metric("변환된 파일", st.session_state.stats.get('files', 1))
         st.metric("처리 시간", f"{st.session_state.stats['time']:.2f}초")
     else:
         st.info("파일을 업로드하면 통계가 표시됩니다")
 
 # 파일 처리
-if uploaded_file is not None:
-    try:
-        # 진행 표시
+if uploaded_files:
+    if st.button("🔄 선택한 PDF 변환 후 저장", type="primary", use_container_width=True):
+        batch_results = []
+        batch_errors = []
+
         with st.spinner('🔄 PDF 파일 처리 중...'):
-            import time
             start_time = time.time()
-            
-            # 임시 파일로 저장
-            temp_pdf_path = f"/tmp/{uploaded_file.name}"
-            with open(temp_pdf_path, "wb") as f:
-                f.write(uploaded_file.getbuffer())
-            
-            # 변환 실행
-            converter = QuotationConverter(temp_pdf_path)
-            result = converter.convert()
-            
-            # CSV 생성
-            csv_buffer = io.StringIO()
-            result.to_csv(csv_buffer, index=False, encoding='utf-8-sig')
-            csv_content = csv_buffer.getvalue()
-            
+
+            for uploaded_file in uploaded_files:
+                temp_pdf_path = None
+                try:
+                    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as temp_file:
+                        temp_file.write(uploaded_file.getbuffer())
+                        temp_pdf_path = temp_file.name
+
+                    converter = QuotationConverter(temp_pdf_path)
+                    result = converter.convert()
+
+                    st.session_state.saved_conversions.append({
+                        'source_file': uploaded_file.name,
+                        'result': result
+                    })
+                    batch_results.append((uploaded_file.name, result))
+                except Exception as file_error:
+                    batch_errors.append((uploaded_file.name, file_error, traceback.format_exc()))
+                finally:
+                    if temp_pdf_path and os.path.exists(temp_pdf_path):
+                        os.remove(temp_pdf_path)
+
             end_time = time.time()
             processing_time = end_time - start_time
-            
-            # 통계 저장
+
             st.session_state.stats = {
-                'items': len(result),
+                'items': sum(len(result) for _, result in batch_results),
+                'files': len(batch_results),
                 'time': processing_time
             }
-        
-        # 성공 메시지
-        st.markdown(f'<div class="success-box">✅ 변환 완료! {len(result)}개 항목이 추출되었습니다.</div>', unsafe_allow_html=True)
-        
-        # 결과 표시
-        st.markdown("### 📋 변환 결과 미리보기")
-        
-        # 탭으로 구분
-        tab1, tab2 = st.tabs(["📊 테이블 뷰", "📄 CSV 원본"])
-        
-        with tab1:
-            st.dataframe(
-                result,
-                use_container_width=True,
-                height=400
+
+        if batch_results:
+            extracted_rows = sum(len(result) for _, result in batch_results)
+            st.markdown(
+                f'<div class="success-box">✅ 변환 완료! {len(batch_results)}개 파일, '
+                f'{extracted_rows}개 항목이 저장되었습니다.</div>',
+                unsafe_allow_html=True
             )
-        
-        with tab2:
-            st.code(csv_content, language='csv')
-        
-        # 다운로드 버튼
-        st.markdown("### 💾 다운로드")
-        col1, col2, col3 = st.columns([1, 1, 2])
-        
-        with col1:
-            st.download_button(
-                label="📥 CSV 다운로드",
-                data=csv_content,
-                file_name=uploaded_file.name.replace('.pdf', '.csv'),
-                mime='text/csv',
-                use_container_width=True
+
+            st.markdown("### 📋 이번 변환 결과 미리보기")
+            latest_combined = pd.concat(
+                [add_source_file_column(result, source_file) for source_file, result in batch_results],
+                ignore_index=True
             )
-        
-        with col2:
-            # Excel 다운로드 옵션
-            excel_buffer = io.BytesIO()
-            result.to_excel(excel_buffer, index=False, engine='openpyxl')
-            excel_buffer.seek(0)
-            
-            st.download_button(
-                label="📊 Excel 다운로드",
-                data=excel_buffer,
-                file_name=uploaded_file.name.replace('.pdf', '.xlsx'),
-                mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                use_container_width=True
+            st.dataframe(latest_combined, use_container_width=True, height=300)
+
+        for file_name, file_error, error_trace in batch_errors:
+            st.markdown(
+                f'<div class="error-box">❌ {file_name} 처리 실패: {type(file_error).__name__}: {str(file_error)}</div>',
+                unsafe_allow_html=True
             )
-        
-        # 파일 정보
-        st.markdown("### 📄 파일 정보")
-        info_col1, info_col2, info_col3 = st.columns(3)
-        
-        with info_col1:
-            st.metric("열 수", len(result.columns))
-        
-        with info_col2:
-            st.metric("행 수", len(result))
-        
-        with info_col3:
-            st.metric("파일 크기", f"{len(csv_content) / 1024:.1f} KB")
-        
-    except Exception as e:
-        st.markdown(f'<div class="error-box">❌ 오류 발생: {type(e).__name__}: {str(e)}</div>', unsafe_allow_html=True)
-        st.error("변환 중 문제가 발생했습니다. PDF 파일이 올바른 견적서 형식인지 확인해주세요.")
-        
-        with st.expander("🔍 오류 상세 정보"):
-            st.code(traceback.format_exc())
-            
-        st.markdown("""
-        ### 💡 문제 해결 팁:
-        - PDF가 텍스트 기반인지 확인 (스캔 이미지가 아닌)
-        - 파일이 손상되지 않았는지 확인
-        - 테이블 구조가 있는지 확인
-        - 다른 브라우저에서 시도
-        """)
+            with st.expander(f"🔍 {file_name} 오류 상세 정보"):
+                st.code(error_trace)
 
 else:
     # 초기 화면
@@ -263,6 +237,51 @@ else:
     }
     sample_df = pd.DataFrame(sample_data)
     st.dataframe(sample_df, use_container_width=True)
+
+st.markdown("---")
+st.markdown("### 🗂️ 저장된 변환 결과")
+
+saved_conversions = st.session_state.saved_conversions
+
+if saved_conversions:
+    total_saved_rows = sum(len(item['result']) for item in saved_conversions)
+    st.write(f"저장된 파일: {len(saved_conversions)}개 | 총 행 수: {total_saved_rows}개")
+
+    saved_summary = pd.DataFrame([
+        {'No.': idx + 1, '파일명': item['source_file'], '행 수': len(item['result'])}
+        for idx, item in enumerate(saved_conversions)
+    ])
+    st.dataframe(saved_summary, use_container_width=True, height=220)
+
+    combined_df = pd.concat(
+        [add_source_file_column(item['result'], item['source_file']) for item in saved_conversions],
+        ignore_index=True
+    )
+    combined_csv_buffer = io.StringIO()
+    combined_df.to_csv(combined_csv_buffer, index=False, encoding='utf-8-sig')
+
+    action_col1, action_col2 = st.columns([1, 1])
+    with action_col1:
+        combined_filename = f"quotations_{datetime.now().strftime('%Y%m%d_%H%M')}.csv"
+        st.download_button(
+            label="📥 전체 CSV 다운로드",
+            data=combined_csv_buffer.getvalue(),
+            file_name=combined_filename,
+            mime='text/csv',
+            use_container_width=True
+        )
+
+    with action_col2:
+        if st.button("🗑️ Clear saved", use_container_width=True):
+            st.session_state.saved_conversions = []
+            if 'stats' in st.session_state:
+                del st.session_state.stats
+            st.rerun()
+
+    if st.checkbox("저장된 데이터 미리보기 표시", value=False):
+        st.dataframe(combined_df, use_container_width=True, height=320)
+else:
+    st.info("저장된 변환 결과가 없습니다.")
 
 # 푸터
 st.markdown("---")
