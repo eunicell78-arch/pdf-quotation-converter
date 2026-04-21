@@ -166,6 +166,7 @@ if uploaded_files:
         )
 
     if run_convert:
+        had_preview_data = bool(st.session_state.pending_conversions or st.session_state.pending_errors)
         batch_results = []
         batch_errors = []
 
@@ -214,6 +215,8 @@ if uploaded_files:
                 f'{extracted_rows}개 항목이 미리보기에 반영되었습니다. 저장 버튼을 눌러 누적하세요.</div>',
                 unsafe_allow_html=True
             )
+        if had_preview_data or st.session_state.pending_conversions or st.session_state.pending_errors:
+            st.rerun()
     if run_save and st.session_state.pending_conversions:
         pending_count = len(st.session_state.pending_conversions)
         pending_rows = sum(len(item['result']) for item in st.session_state.pending_conversions)

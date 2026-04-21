@@ -10,7 +10,7 @@ import os
 # Ensure the project root is on the path
 sys.path.insert(0, os.path.dirname(__file__))
 
-from converter import safe_get
+from converter import safe_get, normalize_lt_value
 
 
 def test_safe_get():
@@ -47,5 +47,25 @@ def test_safe_get():
     print("✅ All safe_get tests passed.")
 
 
+def test_normalize_lt_value():
+    assert normalize_lt_value(None) == '', "None should normalize to empty string"
+    assert normalize_lt_value('') == '', "empty string should stay empty"
+    assert normalize_lt_value('4-6') == '4-6wks', "range should get wks suffix"
+    assert normalize_lt_value('4-6wk') == '4-6wks', "wk suffix should normalize to wks"
+    assert normalize_lt_value('4-6wk.') == '4-6wks', "wk. suffix should normalize to wks"
+    assert normalize_lt_value('4-6 wks') == '4-6wks', "spaced wks should normalize to compact wks"
+    assert normalize_lt_value('4-6week') == '4-6wks', "week suffix should normalize to wks"
+    assert normalize_lt_value('4-6 weeks') == '4-6wks', "weeks suffix should normalize to wks"
+    assert normalize_lt_value('4-6WKS') == '4-6wks', "uppercase WKS should normalize to lowercase wks"
+    assert normalize_lt_value('10') == '10wks', "single numeric value should get wks suffix"
+    assert normalize_lt_value('wk') == 'wks', "unit-only wk should normalize to wks"
+    assert normalize_lt_value('WK') == 'wks', "uppercase WK should normalize to wks"
+    assert normalize_lt_value('week') == 'wks', "unit-only week should normalize to wks"
+    assert normalize_lt_value('WEEKS') == 'wks', "uppercase WEEKS should normalize to wks"
+    assert normalize_lt_value('weeks') == 'wks', "unit-only weeks should normalize to wks"
+    print("✅ All normalize_lt_value tests passed.")
+
+
 if __name__ == '__main__':
     test_safe_get()
+    test_normalize_lt_value()
