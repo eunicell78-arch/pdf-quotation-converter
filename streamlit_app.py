@@ -214,6 +214,7 @@ if uploaded_files:
                 f'{extracted_rows}개 항목이 미리보기에 반영되었습니다. 저장 버튼을 눌러 누적하세요.</div>',
                 unsafe_allow_html=True
             )
+        st.rerun()
     if run_save and st.session_state.pending_conversions:
         pending_count = len(st.session_state.pending_conversions)
         pending_rows = sum(len(item['result']) for item in st.session_state.pending_conversions)

@@ -27,6 +27,22 @@ def safe_get(row, idx, default='', verbose=False):
     return row[idx]
 
 
+def normalize_lt_value(lt_value) -> str:
+    """Normalize L/T values to use a single trailing 'wks' suffix."""
+    if lt_value is None:
+        return ''
+
+    lt_text = str(lt_value).strip()
+    if not lt_text:
+        return ''
+
+    base_text = re.sub(r'(?i)\s*(?:wk|wks|week|weeks)\.?\s*$', '', lt_text).strip()
+    if not base_text:
+        return 'wks'
+
+    return f'{base_text}wks'
+
+
 class QuotationConverter:
     def __init__(self, pdf_path: str):
         self.pdf_path = pdf_path
@@ -390,7 +406,7 @@ class QuotationConverter:
                 'Delivery Term': item['delivery_term'].replace('\n', ' '),
                 'MOQ': qty_value,
                 'Price': item['price'],
-                'L/T': item['lt'],
+                'L/T': normalize_lt_value(item['lt']),
                 'Remark': remark
             })
         
@@ -407,7 +423,7 @@ class QuotationConverter:
                 'Delivery Term': 'NRE List',  # Fixed value
                 'MOQ': nre_item['qty'],  # MOQ = Qty
                 'Price': nre_item['price'],  # Unit Price only
-                'L/T': nre_item['lt'],
+                'L/T': normalize_lt_value(nre_item['lt']),
                 'Remark': nre_item['remark']
             })
         
