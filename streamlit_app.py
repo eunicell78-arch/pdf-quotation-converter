@@ -72,14 +72,19 @@ def add_source_file_column(df, source_file):
 
 if 'saved_conversions' not in st.session_state:
     st.session_state.saved_conversions = []
+if 'pending_conversions' not in st.session_state:
+    st.session_state.pending_conversions = []
+if 'pending_errors' not in st.session_state:
+    st.session_state.pending_errors = []
 
 # 사이드바
 with st.sidebar:
     st.header("ℹ️ 사용 방법")
     st.markdown("""
     1. PDF 견적서 파일 업로드
-    2. 자동 변환 대기
-    3. 결과 확인 및 다운로드
+    2. 변환 클릭(미리보기 확인)
+    3. 저장 클릭(하단 누적)
+    4. 전체 CSV 다운로드
     
     ---
     
@@ -111,7 +116,7 @@ with st.sidebar:
 col1, col2 = st.columns([2, 1])
 
 with col1:
-    st.markdown('<div class="info-box">💡 PDF 견적서 파일을 업로드하면 자동으로 CSV로 변환됩니다.</div>', unsafe_allow_html=True)
+    st.markdown('<div class="info-box">💡 PDF 업로드 후 "변환"으로 미리보기를 확인하고, "저장"을 눌러 하단 목록에 누적하세요.</div>', unsafe_allow_html=True)
 
     # 파일 업로드
     uploaded_files = st.file_uploader(
@@ -132,14 +137,43 @@ with col2:
 
 # 파일 처리
 if uploaded_files:
-    if st.button("🔄 선택한 PDF 변환 후 저장", type="primary", use_container_width=True):
+    uploaded_file_map = {uploaded_file.name: uploaded_file for uploaded_file in uploaded_files}
+    selected_file_names = st.multiselect(
+        "📄 변환할 파일 선택",
+        options=list(uploaded_file_map.keys()),
+        default=list(uploaded_file_map.keys())
+    )
+
+    action_col1, action_col2, action_col3 = st.columns([1, 1, 1])
+    with action_col1:
+        run_convert = st.button(
+            "🔄 변환",
+            type="primary",
+            use_container_width=True,
+            disabled=not selected_file_names
+        )
+    with action_col2:
+        run_save = st.button(
+            "💾 저장",
+            use_container_width=True,
+            disabled=not st.session_state.pending_conversions
+        )
+    with action_col3:
+        run_clear_preview = st.button(
+            "🧹 미리보기 비우기",
+            use_container_width=True,
+            disabled=not (st.session_state.pending_conversions or st.session_state.pending_errors)
+        )
+
+    if run_convert:
         batch_results = []
         batch_errors = []
 
         with st.spinner('🔄 PDF 파일 처리 중...'):
             start_time = time.time()
 
-            for uploaded_file in uploaded_files:
+            for selected_file_name in selected_file_names:
+                uploaded_file = uploaded_file_map[selected_file_name]
                 temp_pdf_path = None
                 try:
                     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as temp_file:
@@ -149,10 +183,6 @@ if uploaded_files:
                     converter = QuotationConverter(temp_pdf_path)
                     result = converter.convert()
 
-                    st.session_state.saved_conversions.append({
-                        'source_file': uploaded_file.name,
-                        'result': result
-                    })
                     batch_results.append((uploaded_file.name, result))
                 except Exception as file_error:
                     batch_errors.append((uploaded_file.name, file_error, traceback.format_exc()))
@@ -168,29 +198,54 @@ if uploaded_files:
                 'files': len(batch_results),
                 'time': processing_time
             }
+            st.session_state.pending_conversions = [
+                {'source_file': source_file, 'result': result}
+                for source_file, result in batch_results
+            ]
+            st.session_state.pending_errors = [
+                {'source_file': file_name, 'error': file_error, 'trace': error_trace}
+                for file_name, file_error, error_trace in batch_errors
+            ]
 
         if batch_results:
             extracted_rows = sum(len(result) for _, result in batch_results)
             st.markdown(
                 f'<div class="success-box">✅ 변환 완료! {len(batch_results)}개 파일, '
-                f'{extracted_rows}개 항목이 저장되었습니다.</div>',
+                f'{extracted_rows}개 항목이 미리보기에 반영되었습니다. 저장 버튼을 눌러 누적하세요.</div>',
                 unsafe_allow_html=True
             )
+    if run_save and st.session_state.pending_conversions:
+        pending_count = len(st.session_state.pending_conversions)
+        pending_rows = sum(len(item['result']) for item in st.session_state.pending_conversions)
+        st.session_state.saved_conversions.extend(st.session_state.pending_conversions)
+        st.session_state.pending_conversions = []
+        st.markdown(
+            f'<div class="success-box">✅ 저장 완료! {pending_count}개 파일, {pending_rows}개 항목이 하단 목록에 누적되었습니다.</div>',
+            unsafe_allow_html=True
+        )
+    if run_clear_preview:
+        st.session_state.pending_conversions = []
+        st.session_state.pending_errors = []
 
-            st.markdown("### 📋 이번 변환 결과 미리보기")
-            latest_combined = pd.concat(
-                [add_source_file_column(result, source_file) for source_file, result in batch_results],
-                ignore_index=True
-            )
-            st.dataframe(latest_combined, use_container_width=True, height=300)
+    if st.session_state.pending_conversions:
+        st.markdown("### 📋 변환 결과 미리보기 (저장 전)")
+        pending_combined = pd.concat(
+            [
+                add_source_file_column(item['result'], item['source_file'])
+                for item in st.session_state.pending_conversions
+            ],
+            ignore_index=True
+        )
+        st.dataframe(pending_combined, use_container_width=True, height=300)
 
-        for file_name, file_error, error_trace in batch_errors:
-            st.markdown(
-                f'<div class="error-box">❌ {file_name} 처리 실패: {type(file_error).__name__}: {str(file_error)}</div>',
-                unsafe_allow_html=True
-            )
-            with st.expander(f"🔍 {file_name} 오류 상세 정보"):
-                st.code(error_trace)
+    for pending_error in st.session_state.pending_errors:
+        st.markdown(
+            f'<div class="error-box">❌ {pending_error["source_file"]} 처리 실패: '
+            f'{type(pending_error["error"]).__name__}: {str(pending_error["error"])}</div>',
+            unsafe_allow_html=True
+        )
+        with st.expander(f'🔍 {pending_error["source_file"]} 오류 상세 정보'):
+            st.code(pending_error["trace"])
 
 else:
     # 초기 화면
@@ -272,7 +327,7 @@ if saved_conversions:
         )
 
     with action_col2:
-        if st.button("🗑️ Clear saved", use_container_width=True):
+        if st.button("🗑️ 저장 목록 비우기", use_container_width=True):
             st.session_state.saved_conversions = []
             if 'stats' in st.session_state:
                 del st.session_state.stats
