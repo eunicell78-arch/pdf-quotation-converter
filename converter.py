@@ -83,10 +83,17 @@ class QuotationConverter:
         
         header = {}
         for line in lines:
-            if line.startswith('To:'):
-                header['customer'] = line.replace('To:', '').strip()
+            line = line.strip()
+            # Handle 'To:' and 'From:' on the same line, e.g. 'To: EV Mode From: Sherry Liu'
+            if 'To:' in line and 'From:' in line:
+                to_part = line.split('To:', 1)[1].split('From:', 1)[0].strip()
+                from_part = line.split('From:', 1)[1].strip()
+                header['customer'] = to_part
+                header['planner'] = from_part
+            elif line.startswith('To:'):
+                header['customer'] = line.split('To:', 1)[1].strip()
             elif 'From:' in line:
-                header['planner'] = line.split('From:')[1].strip()
+                header['planner'] = line.split('From:', 1)[1].strip()
             elif 'Date:' in line:
                 date_str = line.split('Date:')[1].strip()
                 # Convert to yyyy-mm-dd format
@@ -119,18 +126,18 @@ class QuotationConverter:
         for i, line in enumerate(lines):
             line = line.strip()
             
-            # Check for Rated Current
-            if 'Rated Current:' in line or 'rated current:' in line.lower():
-                rated_current = re.sub(r'.*[Rr]ated [Cc]urrent:\s*', '', line).strip()
+            # Check for Rated Current - tolerates spaces around colon and a leading dash
+            if re.search(r'[Rr]ated\s+[Cc]urrent\s*:', line):
+                rated_current = re.sub(r'^-?\s*[Rr]ated\s+[Cc]urrent\s*:\s*', '', line).strip()
                 found_rated = True
                 # Product name is everything before this line
                 if i > 0 and not product_name:
                     product_name = '\n'.join(lines[:i]).strip()
                 continue
             
-            # Check for Cable Length
-            if 'Cable Length:' in line or 'cable length:' in line.lower():
-                cable_length = re.sub(r'.*[Cc]able [Ll]ength:\s*', '', line).strip()
+            # Check for Cable Length - tolerates spaces around colon and a leading dash
+            if re.search(r'[Cc]able\s+[Ll]ength\s*:', line):
+                cable_length = re.sub(r'^-?\s*[Cc]able\s+[Ll]ength\s*:\s*', '', line).strip()
                 found_cable = True
                 continue
             
