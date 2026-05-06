@@ -135,8 +135,91 @@ def test_header_parsing():
     print("✅ All header parsing tests passed.")
 
 
+def test_supplement_product_from_page_text():
+    """
+    Simulate the scenario where table extraction only captured the product name
+    (big font) but missed the smaller-font detail lines.  The full page text
+    contains the complete product block.
+
+    After _supplement_product_from_page_text the item's 'product' field should
+    include the detail lines, and parse_product_field should then populate the
+    final CSV columns correctly.
+    """
+    conv = _converter()
+
+    class FakePage:
+        def extract_text(self):
+            # Simulates page text where the product name appears on a row-data line
+            # and the small-font detail bullets appear on subsequent lines.
+            return (
+                "To: EV Mode From: Sherry Liu\n"
+                "Date: Dec. 22, 2025\n"
+                "Item Product Delivery Term MOQ Unit Price L/T Remark\n"
+                "1 TYPE1 AC Charging Cable, Gen3 FOB SH 100 $12.50 4-6\n"
+                "- Rated Current : 32A\n"
+                "- Cable Length : 5M\n"
+                "- No thermal sensor\n"
+                "- Production Site : China\n"
+            )
+
+    # Simulates what table extraction returns when small-font lines are missed:
+    # only the product name is captured, detail lines are absent.
+    items_incomplete = [
+        {
+            'item': '1',
+            'product': 'TYPE1 AC Charging Cable, Gen3',
+            'delivery_term': 'FOB SH',
+            'moq': '100',
+            'price': '$12.50',
+            'lt': '4-6',
+            'remark': '',
+        }
+    ]
+
+    page = FakePage()
+    supplemented = conv._supplement_product_from_page_text(page, items_incomplete)
+
+    assert len(supplemented) == 1, "item count should be unchanged"
+    enriched = supplemented[0]['product']
+    assert 'Rated Current' in enriched, f"Rated Current missing from enriched: {enriched!r}"
+    assert 'Cable Length' in enriched, f"Cable Length missing from enriched: {enriched!r}"
+    assert 'No thermal sensor' in enriched, f"detail bullet missing from enriched: {enriched!r}"
+
+    # Full pipeline: parse_product_field should now populate all CSV columns
+    product, rc, cl, desc = conv.parse_product_field(enriched)
+    assert product == 'TYPE1 AC Charging Cable, Gen3', f"product: {product!r}"
+    assert rc == '32A', f"rated_current: {rc!r}"
+    assert cl == '5M', f"cable_length: {cl!r}"
+    assert 'No thermal sensor' in desc, f"description: {desc!r}"
+    assert 'Production Site' in desc, f"description: {desc!r}"
+
+    # Verify already-complete items are returned unchanged
+    items_complete = [
+        {
+            'item': '1',
+            'product': (
+                'TYPE1 AC Charging Cable, Gen3\n'
+                '- Rated Current : 32A\n'
+                '- Cable Length : 5M\n'
+                '- No thermal sensor'
+            ),
+            'delivery_term': 'FOB SH',
+            'moq': '100',
+            'price': '$12.50',
+            'lt': '4-6',
+            'remark': '',
+        }
+    ]
+    unchanged = conv._supplement_product_from_page_text(page, items_complete)
+    assert unchanged[0]['product'] == items_complete[0]['product'], \
+        "complete item should not be modified"
+
+    print("✅ All _supplement_product_from_page_text tests passed.")
+
+
 if __name__ == '__main__':
     test_safe_get()
     test_normalize_lt_value()
     test_parse_product_field()
     test_header_parsing()
+    test_supplement_product_from_page_text()
