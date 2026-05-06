@@ -291,8 +291,103 @@ class QuotationConverter:
                     'remark': current_remark
                 })
         
+        # Supplement items whose product cell is missing small-font detail lines
+        items = self._supplement_product_from_page_text(page, items)
+
         return items
-    
+
+    def _supplement_product_from_page_text(self, page, items) -> List[Dict]:
+        """Fallback: recover small-font product detail lines missed by table extraction.
+
+        Some PDFs render detail lines (Rated Current, Cable Length, description
+        bullets) in a smaller font inside the Product cell.  pdfplumber's table
+        extraction can miss those lines, while page-level text extraction usually
+        captures them.
+
+        For each item whose 'product' text appears to be a bare product name (i.e.
+        has no 'Rated Current' or 'Cable Length' keywords), this method searches
+        the full page text for that product name and collects the bullet lines that
+        immediately follow it.  The item's 'product' value is replaced only when
+        the richer text is actually found.
+
+        Already-complete items (detail lines already present) are returned unchanged.
+        """
+        if not items:
+            return items
+
+        def _is_incomplete(product_text):
+            if not product_text:
+                return False
+            lower = product_text.lower()
+            return 'rated current' not in lower and 'cable length' not in lower
+
+        # Quick exit when nothing needs supplementing
+        if not any(_is_incomplete(item['product']) for item in items):
+            return items
+
+        page_text = page.extract_text() or ''
+        if not page_text:
+            return items
+
+        page_lines = [ln.strip() for ln in page_text.split('\n') if ln.strip()]
+
+        result = []
+        for item in items:
+            if not _is_incomplete(item['product']):
+                result.append(item)
+                continue
+
+            product_name = (item['product'] or '').strip()
+            if not product_name:
+                result.append(item)
+                continue
+
+            # Locate the product name in the page text lines
+            product_lower = product_name.lower()
+            start_idx = None
+            for idx, pl in enumerate(page_lines):
+                if pl.lower() == product_lower or product_lower in pl.lower():
+                    start_idx = idx
+                    break
+
+            if start_idx is None:
+                result.append(item)
+                continue
+
+            # Build enriched product text: use the known-good product name as
+            # the first line, then append bullet detail lines from the page text.
+            enriched_lines = [product_name]
+            in_bullet_section = False
+            for pl in page_lines[start_idx + 1:]:
+                if pl.startswith('-'):
+                    enriched_lines.append(pl)
+                    in_bullet_section = True
+                else:
+                    if in_bullet_section:
+                        # Non-bullet line after bullet section ends the block
+                        break
+                    # Before bullets: stop on hard-boundary content
+                    if (re.match(r'^\d+$', pl)
+                            or re.search(r'\$[\d,]+', pl)
+                            or re.search(r'\b(FOB|EXW|CIF|CFR|FCA|DAP)\b', pl, re.IGNORECASE)
+                            or re.match(r'^(MOQ|L/T|Remark)\b', pl, re.IGNORECASE)):
+                        break
+                if len(enriched_lines) > 10:  # safety cap
+                    break
+
+            enriched_text = '\n'.join(enriched_lines)
+
+            # Only upgrade the item when the enriched text actually contains
+            # recognisable detail lines; otherwise leave the original unchanged.
+            if (re.search(r'[Rr]ated\s+[Cc]urrent\s*:', enriched_text)
+                    or re.search(r'[Cc]able\s+[Ll]ength\s*:', enriched_text)):
+                item = dict(item)
+                item['product'] = enriched_text
+
+            result.append(item)
+
+        return result
+
     def extract_nre_list(self, page, verbose=False) -> List[Dict]:
         """Extract NRE List items
         Requirements:
