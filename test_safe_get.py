@@ -10,7 +10,7 @@ import os
 # Ensure the project root is on the path
 sys.path.insert(0, os.path.dirname(__file__))
 
-from converter import safe_get, normalize_lt_value
+from converter import safe_get, normalize_lt_value, QuotationConverter
 
 
 def test_safe_get():
@@ -66,6 +66,77 @@ def test_normalize_lt_value():
     print("✅ All normalize_lt_value tests passed.")
 
 
+def _converter():
+    """Return a QuotationConverter instance without requiring a real PDF."""
+    return QuotationConverter.__new__(QuotationConverter)
+
+
+def test_parse_product_field():
+    conv = _converter()
+
+    # Standard case: colon with no surrounding spaces
+    product, rc, cl, desc = conv.parse_product_field(
+        "TYPE1 AC Charging Cable, Gen3\n"
+        "- Rated Current: 32A\n"
+        "- Cable Length: 5M\n"
+        "- No thermal sensor\n"
+        "- Production Site : China"
+    )
+    assert product == "TYPE1 AC Charging Cable, Gen3", f"product: {product!r}"
+    assert rc == "32A", f"rated_current: {rc!r}"
+    assert cl == "5M", f"cable_length: {cl!r}"
+    assert desc == "No thermal sensor\nProduction Site : China", f"description: {desc!r}"
+
+    # Space before colon: 'Rated Current : 32A'
+    product, rc, cl, desc = conv.parse_product_field(
+        "TYPE1 AC Charging Cable, Gen3\n"
+        "- Rated Current : 32A\n"
+        "- Cable Length : 5M\n"
+        "- No thermal sensor\n"
+        "- Production Site : China"
+    )
+    assert product == "TYPE1 AC Charging Cable, Gen3", f"product: {product!r}"
+    assert rc == "32A", f"rated_current with space: {rc!r}"
+    assert cl == "5M", f"cable_length with space: {cl!r}"
+    assert desc == "No thermal sensor\nProduction Site : China", f"description: {desc!r}"
+
+    # No Rated Current / Cable Length → description stays empty, product is first line
+    product, rc, cl, desc = conv.parse_product_field("Simple Product Name")
+    assert product == "Simple Product Name", f"product: {product!r}"
+    assert rc == "", f"rated_current: {rc!r}"
+    assert cl == "", f"cable_length: {cl!r}"
+    assert desc == "", f"description: {desc!r}"
+
+    print("✅ All parse_product_field tests passed.")
+
+
+def test_header_parsing():
+    conv = _converter()
+
+    # Helper: build a minimal fake page object
+    class FakePage:
+        def __init__(self, text):
+            self._text = text
+        def extract_text(self):
+            return self._text
+
+    # To and From on separate lines
+    page = FakePage("To: EV Mode\nFrom: Sherry Liu\nDate: Dec. 22, 2025\nRef: Q-001")
+    header = conv.extract_header_info(page)
+    assert header.get('customer') == 'EV Mode', f"customer: {header.get('customer')!r}"
+    assert header.get('planner') == 'Sherry Liu', f"planner: {header.get('planner')!r}"
+
+    # To and From on the same line
+    page = FakePage("To: EV Mode From: Sherry Liu\nDate: Dec. 22, 2025")
+    header = conv.extract_header_info(page)
+    assert header.get('customer') == 'EV Mode', f"customer (same-line): {header.get('customer')!r}"
+    assert header.get('planner') == 'Sherry Liu', f"planner (same-line): {header.get('planner')!r}"
+
+    print("✅ All header parsing tests passed.")
+
+
 if __name__ == '__main__':
     test_safe_get()
     test_normalize_lt_value()
+    test_parse_product_field()
+    test_header_parsing()
