@@ -26,8 +26,7 @@ RATED_INLINE_PATTERN = re.compile(
     r'(?i)\brated\s+current\s*:\s*(.+?)(?=\s*\bcable\s+length\s*:|$)'
 )
 CABLE_INLINE_PATTERN = re.compile(
-    r'(?i)\bcable\s+length\s*:\s*(.+?)(?=\s*\b[A-Za-z][A-Za-z0-9 /&()-]{1,%d}\s*:|$)'
-    % MAX_KEY_VALUE_LABEL_LENGTH
+    r'(?i)\bcable\s+length\s*:\s*(.+)$'
 )
 
 
@@ -133,11 +132,12 @@ class QuotationConverter:
         if not product_text or product_text.strip() == '':
             return '', '', '', ''
         
-        lines = [
-            BULLET_PATTERN.sub('', line.strip()).strip()
-            for line in product_text.strip().split('\n')
-            if line.strip()
-        ]
+        lines = []
+        for raw_line in product_text.strip().split('\n'):
+            stripped = raw_line.strip()
+            if not stripped:
+                continue
+            lines.append(BULLET_PATTERN.sub('', stripped).strip())
         product_name = ''
         rated_current = ''
         cable_length = ''
@@ -160,6 +160,8 @@ class QuotationConverter:
                     marker_starts.append(rated_match.start())
                 if cable_match:
                     marker_starts.append(cable_match.start())
+                if not marker_starts:
+                    continue
                 prefix = line[:min(marker_starts)].strip()
                 if prefix:
                     product_name = prefix
