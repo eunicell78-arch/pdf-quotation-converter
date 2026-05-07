@@ -306,9 +306,9 @@ class QuotationConverter:
 
         For each item whose 'product' text appears to be a bare product name (i.e.
         has no 'Rated Current' or 'Cable Length' keywords), this method searches
-        the full page text for that product name and collects the bullet lines that
-        immediately follow it.  The item's 'product' value is replaced only when
-        the richer text is actually found.
+        the full page text for that product name and collects nearby detail lines
+        that immediately follow it. The item's 'product' value is replaced only
+        when richer detail text is actually found.
 
         Already-complete items (detail lines already present) are returned unchanged.
         """
@@ -331,7 +331,29 @@ class QuotationConverter:
 
         page_lines = [ln.strip() for ln in page_text.split('\n') if ln.strip()]
 
+        def _is_boundary_line(line: str) -> bool:
+            """Return True when a line clearly belongs to another table section/row."""
+            return (
+                re.match(r'^\d+\s+\S+', line) is not None
+                or re.search(r'\$[\d,]+(?:\.\d+)?', line) is not None
+                or re.search(r'\b(FOB|EXW|CIF|CFR|FCA|DAP)\b', line, re.IGNORECASE) is not None
+                or re.match(r'^(MOQ|L/T|Remark|Item|NRE List)\b', line, re.IGNORECASE) is not None
+            )
+
+        def _is_detail_cue(line: str) -> bool:
+            """Return True when a line looks like product detail text."""
+            if not line:
+                return False
+            normalized = line.strip()
+            return (
+                re.search(r'[Rr]ated\s+[Cc]urrent\s*:', normalized) is not None
+                or re.search(r'[Cc]able\s+[Ll]ength\s*:', normalized) is not None
+                or re.match(r'^[-•·–—]\s*', normalized) is not None
+                or re.search(r'\b(Production Site|thermal sensor)\b', normalized, re.IGNORECASE) is not None
+            )
+
         result = []
+        search_start_idx = 0
         for item in items:
             if not _is_incomplete(item['product']):
                 result.append(item)
@@ -345,33 +367,46 @@ class QuotationConverter:
             # Locate the product name in the page text lines
             product_lower = product_name.lower()
             start_idx = None
-            for idx, pl in enumerate(page_lines):
+            for idx in range(search_start_idx, len(page_lines)):
+                pl = page_lines[idx]
                 if pl.lower() == product_lower or product_lower in pl.lower():
                     start_idx = idx
                     break
+            if start_idx is None:
+                for idx, pl in enumerate(page_lines):
+                    if pl.lower() == product_lower or product_lower in pl.lower():
+                        start_idx = idx
+                        break
 
             if start_idx is None:
                 result.append(item)
                 continue
 
+            search_start_idx = min(start_idx + 1, len(page_lines))
+
             # Build enriched product text: use the known-good product name as
-            # the first line, then append bullet detail lines from the page text.
+            # the first line, then append detail lines from nearby page text.
             enriched_lines = [product_name]
-            in_bullet_section = False
+            in_detail_section = False
             for pl in page_lines[start_idx + 1:]:
-                if pl.startswith('-'):
+                if _is_boundary_line(pl):
+                    break
+
+                if _is_detail_cue(pl):
                     enriched_lines.append(pl)
-                    in_bullet_section = True
+                    in_detail_section = True
                 else:
-                    if in_bullet_section:
-                        # Non-bullet line after bullet section ends the block
-                        break
-                    # Before bullets: stop on hard-boundary content
-                    if (re.match(r'^\d+$', pl)
-                            or re.search(r'\$[\d,]+', pl)
-                            or re.search(r'\b(FOB|EXW|CIF|CFR|FCA|DAP)\b', pl, re.IGNORECASE)
-                            or re.match(r'^(MOQ|L/T|Remark)\b', pl, re.IGNORECASE)):
-                        break
+                    if in_detail_section:
+                        # Keep follow-up narrative lines after details start
+                        enriched_lines.append(pl)
+                    elif re.search(r':', pl):
+                        # Preserve key/value detail lines even without a leading bullet
+                        enriched_lines.append(pl)
+                        in_detail_section = True
+                    else:
+                        # Ignore unrelated text before details begin.
+                        continue
+
                 if len(enriched_lines) > 10:  # safety cap
                     break
 

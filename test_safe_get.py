@@ -214,6 +214,37 @@ def test_supplement_product_from_page_text():
     assert unchanged[0]['product'] == items_complete[0]['product'], \
         "complete item should not be modified"
 
+    # Detail lines without leading bullets should still be recovered.
+    class FakePageNoBullets:
+        def extract_text(self):
+            return (
+                "Item Product Delivery Term MOQ Unit Price L/T Remark\n"
+                "1 TYPE1 AC Charging Cable, Gen4 FOB SH 100 $13.00 4-6\n"
+                "Rated Current : 32A\n"
+                "Cable Length : 5M\n"
+                "No thermal sensor\n"
+                "Production Site : China\n"
+                "2 Another Product FOB SH 200 $22.00 4-6\n"
+            )
+
+    no_bullet_items = [
+        {
+            'item': '1',
+            'product': 'TYPE1 AC Charging Cable, Gen4',
+            'delivery_term': 'FOB SH',
+            'moq': '100',
+            'price': '$13.00',
+            'lt': '4-6',
+            'remark': '',
+        }
+    ]
+    supplemented_no_bullet = conv._supplement_product_from_page_text(FakePageNoBullets(), no_bullet_items)
+    product, rc, cl, desc = conv.parse_product_field(supplemented_no_bullet[0]['product'])
+    assert product == 'TYPE1 AC Charging Cable, Gen4', f"product (no bullets): {product!r}"
+    assert rc == '32A', f"rated_current (no bullets): {rc!r}"
+    assert cl == '5M', f"cable_length (no bullets): {cl!r}"
+    assert desc == 'No thermal sensor\nProduction Site : China', f"description (no bullets): {desc!r}"
+
     print("✅ All _supplement_product_from_page_text tests passed.")
 
 
