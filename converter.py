@@ -330,14 +330,22 @@ class QuotationConverter:
             return items
 
         page_lines = [ln.strip() for ln in page_text.split('\n') if ln.strip()]
+        item_only_pattern = re.compile(r'^\d+\s*$')
+        price_pattern = re.compile(r'\$[\d,]+(?:\.\d+)?')
+        incoterm_pattern = re.compile(r'\b(FOB|EXW|CIF|CFR|FCA|DAP)\b', re.IGNORECASE)
+        table_header_pattern = re.compile(r'^(MOQ|L/T|Remark|Item|NRE List)\b', re.IGNORECASE)
+        rated_pattern = re.compile(r'[Rr]ated\s+[Cc]urrent\s*:')
+        cable_pattern = re.compile(r'[Cc]able\s+[Ll]ength\s*:')
+        bullet_pattern = re.compile(r'^[-•·–—]\s*')
+        key_value_pattern = re.compile(r'^[A-Za-z][A-Za-z0-9 /&()\-]{1,40}\s*:\s*\S')
 
         def _is_boundary_line(line: str) -> bool:
             """Return True when a line clearly belongs to another table section/row."""
             return (
-                re.match(r'^\d+\s+\S+', line) is not None
-                or re.search(r'\$[\d,]+(?:\.\d+)?', line) is not None
-                or re.search(r'\b(FOB|EXW|CIF|CFR|FCA|DAP)\b', line, re.IGNORECASE) is not None
-                or re.match(r'^(MOQ|L/T|Remark|Item|NRE List)\b', line, re.IGNORECASE) is not None
+                item_only_pattern.match(line) is not None
+                or price_pattern.search(line) is not None
+                or incoterm_pattern.search(line) is not None
+                or table_header_pattern.match(line) is not None
             )
 
         def _is_detail_cue(line: str) -> bool:
@@ -346,14 +354,12 @@ class QuotationConverter:
                 return False
             normalized = line.strip()
             return (
-                re.search(r'[Rr]ated\s+[Cc]urrent\s*:', normalized) is not None
-                or re.search(r'[Cc]able\s+[Ll]ength\s*:', normalized) is not None
-                or re.match(r'^[-•·–—]\s*', normalized) is not None
-                or re.search(r'\b(Production Site|thermal sensor)\b', normalized, re.IGNORECASE) is not None
+                rated_pattern.search(normalized) is not None
+                or cable_pattern.search(normalized) is not None
+                or bullet_pattern.match(normalized) is not None
             )
 
         result = []
-        search_start_idx = 0
         for item in items:
             if not _is_incomplete(item['product']):
                 result.append(item)
@@ -367,22 +373,14 @@ class QuotationConverter:
             # Locate the product name in the page text lines
             product_lower = product_name.lower()
             start_idx = None
-            for idx in range(search_start_idx, len(page_lines)):
-                pl = page_lines[idx]
+            for idx, pl in enumerate(page_lines):
                 if pl.lower() == product_lower or product_lower in pl.lower():
                     start_idx = idx
                     break
-            if start_idx is None:
-                for idx, pl in enumerate(page_lines):
-                    if pl.lower() == product_lower or product_lower in pl.lower():
-                        start_idx = idx
-                        break
 
             if start_idx is None:
                 result.append(item)
                 continue
-
-            search_start_idx = min(start_idx + 1, len(page_lines))
 
             # Build enriched product text: use the known-good product name as
             # the first line, then append detail lines from nearby page text.
@@ -399,7 +397,7 @@ class QuotationConverter:
                     if in_detail_section:
                         # Keep follow-up narrative lines after details start
                         enriched_lines.append(pl)
-                    elif re.search(r':', pl):
+                    elif key_value_pattern.match(pl):
                         # Preserve key/value detail lines even without a leading bullet
                         enriched_lines.append(pl)
                         in_detail_section = True

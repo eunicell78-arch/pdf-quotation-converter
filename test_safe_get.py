@@ -239,6 +239,8 @@ def test_supplement_product_from_page_text():
         }
     ]
     supplemented_no_bullet = conv._supplement_product_from_page_text(FakePageNoBullets(), no_bullet_items)
+    assert 'Another Product' not in supplemented_no_bullet[0]['product'], \
+        "supplement should stop before next item row"
     product, rc, cl, desc = conv.parse_product_field(supplemented_no_bullet[0]['product'])
     assert product == 'TYPE1 AC Charging Cable, Gen4', f"product (no bullets): {product!r}"
     assert rc == '32A', f"rated_current (no bullets): {rc!r}"
