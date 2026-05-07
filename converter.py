@@ -126,51 +126,58 @@ class QuotationConverter:
         if not product_text or product_text.strip() == '':
             return '', '', '', ''
         
-        lines = product_text.strip().split('\n')
+        lines = [
+            BULLET_PATTERN.sub('', line.strip()).strip()
+            for line in product_text.strip().split('\n')
+            if line and line.strip()
+        ]
         product_name = ''
         rated_current = ''
         cable_length = ''
         description_parts = []
-        
-        found_rated = False
-        found_cable = False
-        
-        for i, line in enumerate(lines):
-            line = line.strip()
-            
-            # Check for Rated Current - tolerates spaces around colon and a leading dash
-            if re.search(r'[Rr]ated\s+[Cc]urrent\s*:', line):
-                rated_current = re.sub(r'^-?\s*[Rr]ated\s+[Cc]urrent\s*:\s*', '', line).strip()
-                found_rated = True
-                # Product name is everything before this line
-                if i > 0 and not product_name:
-                    product_name = '\n'.join(lines[:i]).strip()
+        saw_detail_marker = False
+
+        rated_inline_pattern = re.compile(
+            r'(?i)\brated\s+current\s*:\s*(.+?)(?=\s*\bcable\s+length\s*:|$)'
+        )
+        cable_inline_pattern = re.compile(
+            r'(?i)\bcable\s+length\s*:\s*(.+?)(?=\s*\b[A-Za-z][A-Za-z0-9 /&()-]{1,%d}\s*:|$)'
+            % MAX_KEY_VALUE_LABEL_LENGTH
+        )
+
+        for line in lines:
+            rated_match = rated_inline_pattern.search(line)
+            cable_match = cable_inline_pattern.search(line)
+            has_marker = bool(rated_match or cable_match)
+
+            if rated_match and not rated_current:
+                rated_current = rated_match.group(1).strip()
+            if cable_match and not cable_length:
+                cable_length = cable_match.group(1).strip()
+
+            if has_marker and not product_name:
+                marker_starts = [m.start() for m in (rated_match, cable_match) if m]
+                if marker_starts:
+                    prefix = line[:min(marker_starts)].strip()
+                    if prefix:
+                        product_name = prefix
+
+            if has_marker:
+                saw_detail_marker = True
                 continue
-            
-            # Check for Cable Length - tolerates spaces around colon and a leading dash
-            if re.search(r'[Cc]able\s+[Ll]ength\s*:', line):
-                cable_length = re.sub(r'^-?\s*[Cc]able\s+[Ll]ength\s*:\s*', '', line).strip()
-                found_cable = True
+
+            if not product_name:
+                product_name = line
                 continue
-            
-            # After Cable Length, everything is description
-            if found_cable:
-                if line.startswith('-'):
-                    line = line[1:].strip()
+
+            if saw_detail_marker:
                 description_parts.append(line)
-            # Before Rated Current, it's product name
-            elif not found_rated and not product_name:
-                if not line.startswith('-'):
-                    product_name = line
-        
+
         description = '\n'.join(description_parts).strip()
-        
-        # If no product name found, use first line
+
         if not product_name and lines:
             product_name = lines[0].strip()
-            if product_name.startswith('-'):
-                product_name = product_name[1:].strip()
-        
+
         return product_name, rated_current, cable_length, description
     
     def extract_table_data(self, page, verbose=False) -> List[Dict]:
@@ -331,7 +338,7 @@ class QuotationConverter:
             if not product_text:
                 return False
             lower = product_text.lower()
-            return 'rated current' not in lower and 'cable length' not in lower
+            return 'rated current' not in lower or 'cable length' not in lower
 
         # Quick exit when nothing needs supplementing
         if not any(_is_incomplete(item['product']) for item in items):
