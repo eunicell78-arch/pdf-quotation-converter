@@ -22,6 +22,13 @@ MAX_KEY_VALUE_LABEL_LENGTH = 40
 KEY_VALUE_PATTERN = re.compile(
     r'^[A-Za-z][A-Za-z0-9 /&()-]{1,%d}\s*:\s*\S' % MAX_KEY_VALUE_LABEL_LENGTH
 )
+RATED_INLINE_PATTERN = re.compile(
+    r'(?i)\brated\s+current\s*:\s*(.+?)(?=\s*\bcable\s+length\s*:|$)'
+)
+CABLE_INLINE_PATTERN = re.compile(
+    r'(?i)\bcable\s+length\s*:\s*(.+?)(?=\s*\b[A-Za-z][A-Za-z0-9 /&()-]{1,%d}\s*:|$)'
+    % MAX_KEY_VALUE_LABEL_LENGTH
+)
 
 
 def safe_get(row, idx, default='', verbose=False):
@@ -129,7 +136,7 @@ class QuotationConverter:
         lines = [
             BULLET_PATTERN.sub('', line.strip()).strip()
             for line in product_text.strip().split('\n')
-            if line and line.strip()
+            if line.strip()
         ]
         product_name = ''
         rated_current = ''
@@ -137,17 +144,9 @@ class QuotationConverter:
         description_parts = []
         saw_detail_marker = False
 
-        rated_inline_pattern = re.compile(
-            r'(?i)\brated\s+current\s*:\s*(.+?)(?=\s*\bcable\s+length\s*:|$)'
-        )
-        cable_inline_pattern = re.compile(
-            r'(?i)\bcable\s+length\s*:\s*(.+?)(?=\s*\b[A-Za-z][A-Za-z0-9 /&()-]{1,%d}\s*:|$)'
-            % MAX_KEY_VALUE_LABEL_LENGTH
-        )
-
         for line in lines:
-            rated_match = rated_inline_pattern.search(line)
-            cable_match = cable_inline_pattern.search(line)
+            rated_match = RATED_INLINE_PATTERN.search(line)
+            cable_match = CABLE_INLINE_PATTERN.search(line)
             has_marker = bool(rated_match or cable_match)
 
             if rated_match and not rated_current:
@@ -156,11 +155,14 @@ class QuotationConverter:
                 cable_length = cable_match.group(1).strip()
 
             if has_marker and not product_name:
-                marker_starts = [m.start() for m in (rated_match, cable_match) if m]
-                if marker_starts:
-                    prefix = line[:min(marker_starts)].strip()
-                    if prefix:
-                        product_name = prefix
+                marker_starts = []
+                if rated_match:
+                    marker_starts.append(rated_match.start())
+                if cable_match:
+                    marker_starts.append(cable_match.start())
+                prefix = line[:min(marker_starts)].strip()
+                if prefix:
+                    product_name = prefix
 
             if has_marker:
                 saw_detail_marker = True
@@ -338,7 +340,9 @@ class QuotationConverter:
             if not product_text:
                 return False
             lower = product_text.lower()
-            return 'rated current' not in lower or 'cable length' not in lower
+            has_rated = 'rated current' in lower
+            has_cable = 'cable length' in lower
+            return not (has_rated and has_cable)
 
         # Quick exit when nothing needs supplementing
         if not any(_is_incomplete(item['product']) for item in items):
