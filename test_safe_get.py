@@ -10,7 +10,7 @@ import os
 # Ensure the project root is on the path
 sys.path.insert(0, os.path.dirname(__file__))
 
-from converter import safe_get, normalize_lt_value, QuotationConverter
+from converter import safe_get, normalize_lt_value, QuotationConverter, KEY_VALUE_PATTERN
 
 
 def test_safe_get():
@@ -239,6 +239,9 @@ def test_supplement_product_from_page_text():
         }
     ]
     supplemented_no_bullet = conv._supplement_product_from_page_text(FakePageNoBullets(), no_bullet_items)
+    assert KEY_VALUE_PATTERN.match("Production Site : China"), "key/value detail pattern should match"
+    assert "Production Site : China" in supplemented_no_bullet[0]['product'], \
+        "supplement should include key/value description detail line"
     assert 'Another Product' not in supplemented_no_bullet[0]['product'], \
         "supplement should stop before next item row"
     product, rc, cl, desc = conv.parse_product_field(supplemented_no_bullet[0]['product'])

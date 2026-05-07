@@ -11,6 +11,18 @@ import sys
 from typing import Dict, List, Tuple, Optional
 from datetime import datetime
 
+ITEM_ONLY_PATTERN = re.compile(r'^\d+\s*$')
+PRICE_PATTERN = re.compile(r'\$[\d,]+(?:\.\d+)?')
+INCOTERM_PATTERN = re.compile(r'\b(FOB|EXW|CIF|CFR|FCA|DAP)\b', re.IGNORECASE)
+TABLE_HEADER_PATTERN = re.compile(r'^(MOQ|L/T|Remark|Item)\b', re.IGNORECASE)
+RATED_PATTERN = re.compile(r'[Rr]ated\s+[Cc]urrent\s*:')
+CABLE_PATTERN = re.compile(r'[Cc]able\s+[Ll]ength\s*:')
+BULLET_PATTERN = re.compile(r'^[-•·–—]\s*')
+MAX_KEY_VALUE_LABEL_LENGTH = 40
+KEY_VALUE_PATTERN = re.compile(
+    r'^[A-Za-z][A-Za-z0-9 /&()-]{1,%d}\s*:\s*\S' % MAX_KEY_VALUE_LABEL_LENGTH
+)
+
 
 def safe_get(row, idx, default='', verbose=False):
     """Safely retrieve row[idx], returning default when idx is out of bounds.
@@ -330,33 +342,23 @@ class QuotationConverter:
             return items
 
         page_lines = [ln.strip() for ln in page_text.split('\n') if ln.strip()]
-        item_only_pattern = re.compile(r'^\d+\s*$')
-        price_pattern = re.compile(r'\$[\d,]+(?:\.\d+)?')
-        incoterm_pattern = re.compile(r'\b(FOB|EXW|CIF|CFR|FCA|DAP)\b', re.IGNORECASE)
-        table_header_pattern = re.compile(r'^(MOQ|L/T|Remark|Item|NRE List)\b', re.IGNORECASE)
-        rated_pattern = re.compile(r'[Rr]ated\s+[Cc]urrent\s*:')
-        cable_pattern = re.compile(r'[Cc]able\s+[Ll]ength\s*:')
-        bullet_pattern = re.compile(r'^[-•·–—]\s*')
-        key_value_pattern = re.compile(r'^[A-Za-z][A-Za-z0-9 /&()\-]{1,40}\s*:\s*\S')
-
         def _is_boundary_line(line: str) -> bool:
             """Return True when a line clearly belongs to another table section/row."""
             return (
-                item_only_pattern.match(line) is not None
-                or price_pattern.search(line) is not None
-                or incoterm_pattern.search(line) is not None
-                or table_header_pattern.match(line) is not None
+                ITEM_ONLY_PATTERN.match(line)
+                or PRICE_PATTERN.search(line)
+                or INCOTERM_PATTERN.search(line)
+                or TABLE_HEADER_PATTERN.match(line)
             )
 
         def _is_detail_cue(line: str) -> bool:
             """Return True when a line looks like product detail text."""
             if not line:
                 return False
-            normalized = line.strip()
             return (
-                rated_pattern.search(normalized) is not None
-                or cable_pattern.search(normalized) is not None
-                or bullet_pattern.match(normalized) is not None
+                RATED_PATTERN.search(line)
+                or CABLE_PATTERN.search(line)
+                or BULLET_PATTERN.match(line)
             )
 
         result = []
@@ -397,7 +399,7 @@ class QuotationConverter:
                     if in_detail_section:
                         # Keep follow-up narrative lines after details start
                         enriched_lines.append(pl)
-                    elif key_value_pattern.match(pl):
+                    elif KEY_VALUE_PATTERN.match(pl):
                         # Preserve key/value detail lines even without a leading bullet
                         enriched_lines.append(pl)
                         in_detail_section = True
