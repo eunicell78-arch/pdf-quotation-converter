@@ -160,8 +160,6 @@ class QuotationConverter:
                     marker_starts.append(rated_match.start())
                 if cable_match:
                     marker_starts.append(cable_match.start())
-                if not marker_starts:
-                    continue
                 prefix = line[:min(marker_starts)].strip()
                 if prefix:
                     product_name = prefix
