@@ -100,6 +100,30 @@ def test_parse_product_field():
     assert cl == "5M", f"cable_length with space: {cl!r}"
     assert desc == "No thermal sensor\nProduction Site : China", f"description: {desc!r}"
 
+    # Smaller-font bullets may extract as dot bullets instead of hyphen bullets.
+    product, rc, cl, desc = conv.parse_product_field(
+        "TYPE1 AC Charging Cable, Gen3\n"
+        "• Rated Current : 32A\n"
+        "• Cable Length : 5M\n"
+        "• No thermal sensor\n"
+        "• Production Site : China"
+    )
+    assert product == "TYPE1 AC Charging Cable, Gen3", f"product (dot bullets): {product!r}"
+    assert rc == "32A", f"rated_current (dot bullets): {rc!r}"
+    assert cl == "5M", f"cable_length (dot bullets): {cl!r}"
+    assert desc == "No thermal sensor\nProduction Site : China", f"description (dot bullets): {desc!r}"
+
+    # Some extracted rows keep product title and key/value fields on the same line.
+    product, rc, cl, desc = conv.parse_product_field(
+        "TYPE1 AC Charging Cable, Gen3 Rated Current : 32A Cable Length : 5M\n"
+        "- No thermal sensor\n"
+        "- Production Site : China"
+    )
+    assert product == "TYPE1 AC Charging Cable, Gen3", f"product (inline): {product!r}"
+    assert rc == "32A", f"rated_current (inline): {rc!r}"
+    assert cl == "5M", f"cable_length (inline): {cl!r}"
+    assert desc == "No thermal sensor\nProduction Site : China", f"description (inline): {desc!r}"
+
     # No Rated Current / Cable Length → description stays empty, product is first line
     product, rc, cl, desc = conv.parse_product_field("Simple Product Name")
     assert product == "Simple Product Name", f"product: {product!r}"
