@@ -11,6 +11,18 @@ import sys
 from typing import Dict, List, Tuple, Optional
 from datetime import datetime
 
+ITEM_ONLY_PATTERN = re.compile(r'^\d+\s*$')
+PRICE_PATTERN = re.compile(r'\$[\d,]+(?:\.\d+)?')
+INCOTERM_PATTERN = re.compile(r'\b(FOB|EXW|CIF|CFR|FCA|DAP)\b', re.IGNORECASE)
+TABLE_HEADER_PATTERN = re.compile(r'^(MOQ|L/T|Remark|Item)\b', re.IGNORECASE)
+RATED_PATTERN = re.compile(r'[Rr]ated\s+[Cc]urrent\s*:')
+CABLE_PATTERN = re.compile(r'[Cc]able\s+[Ll]ength\s*:')
+BULLET_PATTERN = re.compile(r'^[-•·–—]\s*')
+MAX_KEY_VALUE_LABEL_LENGTH = 40
+KEY_VALUE_PATTERN = re.compile(
+    r'^[A-Za-z][A-Za-z0-9 /&()-]{1,%d}\s*:\s*\S' % MAX_KEY_VALUE_LABEL_LENGTH
+)
+
 
 def safe_get(row, idx, default='', verbose=False):
     """Safely retrieve row[idx], returning default when idx is out of bounds.
@@ -306,9 +318,9 @@ class QuotationConverter:
 
         For each item whose 'product' text appears to be a bare product name (i.e.
         has no 'Rated Current' or 'Cable Length' keywords), this method searches
-        the full page text for that product name and collects the bullet lines that
-        immediately follow it.  The item's 'product' value is replaced only when
-        the richer text is actually found.
+        the full page text for that product name and collects nearby detail lines
+        that immediately follow it. The item's 'product' value is replaced only
+        when richer detail text is actually found.
 
         Already-complete items (detail lines already present) are returned unchanged.
         """
@@ -330,6 +342,24 @@ class QuotationConverter:
             return items
 
         page_lines = [ln.strip() for ln in page_text.split('\n') if ln.strip()]
+        def _is_boundary_line(line: str) -> bool:
+            """Return True when a line clearly belongs to another table section/row."""
+            return (
+                ITEM_ONLY_PATTERN.match(line)
+                or PRICE_PATTERN.search(line)
+                or INCOTERM_PATTERN.search(line)
+                or TABLE_HEADER_PATTERN.match(line)
+            )
+
+        def _is_detail_cue(line: str) -> bool:
+            """Return True when a line looks like product detail text."""
+            if not line:
+                return False
+            return (
+                RATED_PATTERN.search(line)
+                or CABLE_PATTERN.search(line)
+                or BULLET_PATTERN.match(line)
+            )
 
         result = []
         for item in items:
@@ -355,23 +385,28 @@ class QuotationConverter:
                 continue
 
             # Build enriched product text: use the known-good product name as
-            # the first line, then append bullet detail lines from the page text.
+            # the first line, then append detail lines from nearby page text.
             enriched_lines = [product_name]
-            in_bullet_section = False
+            in_detail_section = False
             for pl in page_lines[start_idx + 1:]:
-                if pl.startswith('-'):
+                if _is_boundary_line(pl):
+                    break
+
+                if _is_detail_cue(pl):
                     enriched_lines.append(pl)
-                    in_bullet_section = True
+                    in_detail_section = True
                 else:
-                    if in_bullet_section:
-                        # Non-bullet line after bullet section ends the block
-                        break
-                    # Before bullets: stop on hard-boundary content
-                    if (re.match(r'^\d+$', pl)
-                            or re.search(r'\$[\d,]+', pl)
-                            or re.search(r'\b(FOB|EXW|CIF|CFR|FCA|DAP)\b', pl, re.IGNORECASE)
-                            or re.match(r'^(MOQ|L/T|Remark)\b', pl, re.IGNORECASE)):
-                        break
+                    if in_detail_section:
+                        # Keep follow-up narrative lines after details start
+                        enriched_lines.append(pl)
+                    elif KEY_VALUE_PATTERN.match(pl):
+                        # Preserve key/value detail lines even without a leading bullet
+                        enriched_lines.append(pl)
+                        in_detail_section = True
+                    else:
+                        # Ignore unrelated text before details begin.
+                        continue
+
                 if len(enriched_lines) > 10:  # safety cap
                     break
 
