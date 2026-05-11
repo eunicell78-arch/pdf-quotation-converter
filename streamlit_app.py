@@ -56,6 +56,23 @@ st.markdown("""
         color: #721c24;
         margin: 1rem 0;
     }
+    /* 파일 업로더 에러 메시지가 업로드된 파일 카드 위로 겹쳐 X 버튼이 가려지는 문제 해결 */
+    /* 파일 업로드 영역 내부 요소들이 가로로 겹치지 않고 세로로 쌓이도록 함 */
+    [data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] {
+        flex-wrap: wrap;
+    }
+    /* 잘못된 파일 형식 등 에러 메시지를 파일 카드 아래로 밀어내기 */
+    [data-testid="stFileUploader"] [data-testid="stAlert"],
+    [data-testid="stFileUploader"] [role="alert"] {
+        margin-top: 0.5rem !important;
+        width: 100% !important;
+        order: 99 !important;
+    }
+    /* 파일 카드들이 항상 최상단에 표시되어 X 버튼이 가려지지 않게 */
+    [data-testid="stFileUploaderFile"] {
+        position: relative;
+        z-index: 10;
+    }
     </style>
 """, unsafe_allow_html=True)
 
