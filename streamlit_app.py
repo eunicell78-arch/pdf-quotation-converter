@@ -56,45 +56,6 @@ st.markdown("""
         color: #721c24;
         margin: 1rem 0;
     }
-    /* 파일 업로더의 에러 메시지를 완전히 숨김 */
-    /* 빨간색 파일 카드만으로 오류를 충분히 알 수 있으므로 메시지는 불필요 */
-
-    /* 1) 호버 시 뜨는 풍선 도움말(툴팁) 모두 숨김 - 파일 업로더 영역 안만 */
-    [data-testid="stFileUploader"] [data-baseweb="tooltip"],
-    [data-testid="stFileUploader"] [role="tooltip"],
-    [data-testid="stTooltipContent"]:has(~ [data-testid="stFileUploader"]),
-    body > div[data-baseweb="popover"],
-    body > div[data-baseweb="tooltip"] {
-        display: none !important;
-        visibility: hidden !important;
-        opacity: 0 !important;
-        pointer-events: none !important;
-    }
-
-    /* 2) 파일 업로더 내부의 모든 알림/에러 박스 숨김 */
-    [data-testid="stFileUploader"] [data-testid="stAlert"],
-    [data-testid="stFileUploader"] [data-baseweb="notification"],
-    [data-testid="stFileUploader"] [role="alert"],
-    [data-testid="stFileUploaderFileErrorMessage"],
-    [data-testid="stFileUploaderFile"] [class*="error"],
-    [data-testid="stFileUploaderFile"] [class*="Error"] {
-        display: none !important;
-        visibility: hidden !important;
-        height: 0 !important;
-        max-height: 0 !important;
-        overflow: hidden !important;
-    }
-
-    /* 3) 파일 카드와 X 버튼은 항상 최상단 - 어떤 팝업도 가리지 못하게 */
-    [data-testid="stFileUploaderFile"] {
-        position: relative;
-        z-index: 9999 !important;
-    }
-    [data-testid="stFileUploaderFile"] button {
-        position: relative;
-        z-index: 10000 !important;
-        pointer-events: auto !important;
-    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -174,11 +135,13 @@ with col1:
     st.markdown('<div class="info-box">💡 PDF 업로드 후 "변환"으로 미리보기를 확인하고, "저장"을 눌러 하단 목록에 누적하세요.</div>', unsafe_allow_html=True)
 
     # 파일 업로드 - key 사용으로 초기화 가능하게
+    # type 제한을 두지 않아 어떤 파일이든 받음. 변환 시 PDF가 아닌 파일은 건너뜀.
+    # 이렇게 하면 잘못된 형식의 파일을 올려도 빨간 에러 메시지가 뜨지 않음.
     uploaded_files = st.file_uploader(
-        "PDF 파일 선택",
-        type=['pdf'],
+        "PDF 파일 선택 (PDF 형식만 변환 가능)",
+        type=None,
         accept_multiple_files=True,
-        help="텍스트 기반 PDF 견적서를 업로드하세요 (스캔 이미지 PDF는 지원하지 않습니다)",
+        help="텍스트 기반 PDF 견적서를 업로드하세요. PDF가 아닌 파일은 변환 시 자동으로 건너뜁니다.",
         key=f"file_uploader_{st.session_state.uploader_key}"
     )
 
@@ -243,12 +206,19 @@ if uploaded_files:
         had_preview_data = bool(st.session_state.pending_conversions or st.session_state.pending_errors)
         batch_results = []
         batch_errors = []
+        skipped_files = []  # PDF가 아닌 파일들 (조용히 건너뛰지 않고 안내만)
 
         with st.spinner('🔄 PDF 파일 처리 중...'):
             start_time = time.time()
 
             for selected_file_name in selected_file_names:
                 uploaded_file = uploaded_file_map[selected_file_name]
+
+                # PDF가 아닌 파일은 변환 건너뛰기 (확장자로 판별)
+                if not selected_file_name.lower().endswith('.pdf'):
+                    skipped_files.append(selected_file_name)
+                    continue
+
                 temp_pdf_path = None
                 try:
                     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as temp_file:
@@ -283,6 +253,10 @@ if uploaded_files:
             ]
             # 새로 변환하면 "저장 직후 상태"는 해제
             st.session_state.just_saved = False
+
+        if skipped_files:
+            skipped_list = ', '.join(skipped_files)
+            st.warning(f"⚠️ PDF가 아닌 다음 파일은 건너뛰었습니다: {skipped_list}")
 
         if batch_results:
             extracted_rows = sum(len(result) for _, result in batch_results)
