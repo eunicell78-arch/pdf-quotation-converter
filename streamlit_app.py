@@ -56,26 +56,40 @@ st.markdown("""
         color: #721c24;
         margin: 1rem 0;
     }
-    /* 파일 업로더 에러 풍선 도움말(툴팁)이 파일 카드의 X 버튼을 가리는 문제 해결 */
-    /* 1) 파일 업로더 안의 호버 툴팁만 선택적으로 숨김 (다른 곳의 도움말은 유지) */
+    /* 파일 업로더의 에러 메시지를 완전히 숨김 */
+    /* 빨간색 파일 카드만으로 오류를 충분히 알 수 있으므로 메시지는 불필요 */
+
+    /* 1) 호버 시 뜨는 풍선 도움말(툴팁) 모두 숨김 - 파일 업로더 영역 안만 */
     [data-testid="stFileUploader"] [data-baseweb="tooltip"],
-    [data-testid="stFileUploader"] [role="tooltip"] {
+    [data-testid="stFileUploader"] [role="tooltip"],
+    [data-testid="stTooltipContent"]:has(~ [data-testid="stFileUploader"]),
+    body > div[data-baseweb="popover"],
+    body > div[data-baseweb="tooltip"] {
         display: none !important;
+        visibility: hidden !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
     }
-    /* 2) 파일 업로더 내부 에러 메시지를 파일 카드 아래로 밀어내기 */
+
+    /* 2) 파일 업로더 내부의 모든 알림/에러 박스 숨김 */
     [data-testid="stFileUploader"] [data-testid="stAlert"],
-    [data-testid="stFileUploader"] [role="alert"] {
-        margin-top: 0.5rem !important;
-        width: 100% !important;
-        order: 99 !important;
+    [data-testid="stFileUploader"] [data-baseweb="notification"],
+    [data-testid="stFileUploader"] [role="alert"],
+    [data-testid="stFileUploaderFileErrorMessage"],
+    [data-testid="stFileUploaderFile"] [class*="error"],
+    [data-testid="stFileUploaderFile"] [class*="Error"] {
+        display: none !important;
+        visibility: hidden !important;
+        height: 0 !important;
+        max-height: 0 !important;
+        overflow: hidden !important;
     }
-    /* 3) 파일 카드는 항상 최상단에 표시 - 어떤 팝업도 가리지 못하게 z-index 매우 높게 */
-    [data-testid="stFileUploaderFile"],
-    [data-testid="stFileUploaderFileName"] {
+
+    /* 3) 파일 카드와 X 버튼은 항상 최상단 - 어떤 팝업도 가리지 못하게 */
+    [data-testid="stFileUploaderFile"] {
         position: relative;
         z-index: 9999 !important;
     }
-    /* 4) 파일 카드의 X(삭제) 버튼은 항상 클릭 가능하게 보장 */
     [data-testid="stFileUploaderFile"] button {
         position: relative;
         z-index: 10000 !important;
