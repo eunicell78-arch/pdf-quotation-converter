@@ -17,8 +17,16 @@ import pdfplumber
 import pandas as pd
 import re
 import sys
+import os
 from typing import Dict, List, Tuple, Optional
 from datetime import datetime
+
+# openpyxl은 엑셀 파일 처리 시에만 import (PDF만 처리하는 환경에서도 동작하도록)
+try:
+    import openpyxl
+    OPENPYXL_AVAILABLE = True
+except ImportError:
+    OPENPYXL_AVAILABLE = False
 
 
 # ============================================================
@@ -416,6 +424,14 @@ class QuotationConverter:
             })
 
     def convert(self):
+        """파일 확장자에 따라 PDF 또는 엑셀로 분기 처리"""
+        ext = os.path.splitext(self.pdf_path)[1].lower()
+        if ext in ('.xlsx', '.xls', '.xlsm'):
+            return self._convert_excel()
+        else:
+            return self._convert_pdf()
+
+    def _convert_pdf(self):
         """PDF → CSV 변환 메인 로직"""
         with pdfplumber.open(self.pdf_path) as pdf:
             previous_main_columns = None
@@ -445,6 +461,163 @@ class QuotationConverter:
 
         # 가격 등급 자동 분리는 process_main_table에서 이미 처리됨 (Remark 병합 셀로)
         return self._build_dataframe()
+
+    def _convert_excel(self):
+        """엑셀 파일을 표 형태로 읽어와 처리
+
+        SINBON 등 엑셀 견적서는 PDF와 컬럼 구조가 거의 동일.
+        병합 셀을 풀어서 표준 표 형식(rows of cells)으로 변환한 뒤
+        PDF와 동일한 process_main_table / extract_header_from_table을 활용한다.
+        """
+        if not OPENPYXL_AVAILABLE:
+            raise ImportError("엑셀 파일을 처리하려면 openpyxl이 필요합니다. 'pip install openpyxl'로 설치하세요.")
+
+        wb = openpyxl.load_workbook(self.pdf_path, data_only=True)
+
+        for sheet_name in wb.sheetnames:
+            ws = wb[sheet_name]
+            self._process_excel_sheet(ws)
+
+        return self._build_dataframe()
+
+    def _process_excel_sheet(self, ws):
+        """엑셀 시트 하나를 처리해 main_rows와 nre_rows, header_info를 채움"""
+        # 1) 시트의 모든 셀 값을 2차원 배열로 가져오기 (병합 셀은 좌상단에만 값 있음)
+        max_row = ws.max_row
+        max_col = ws.max_column
+
+        # 병합된 셀의 값을 모든 병합 셀에 복사 (PDF 표 추출과 동일한 형태로 만들기)
+        merged_value_map = {}
+        for merged_range in ws.merged_cells.ranges:
+            top_left_val = ws.cell(merged_range.min_row, merged_range.min_col).value
+            for r in range(merged_range.min_row, merged_range.max_row + 1):
+                for c in range(merged_range.min_col, merged_range.max_col + 1):
+                    if (r, c) != (merged_range.min_row, merged_range.min_col):
+                        merged_value_map[(r, c)] = top_left_val
+
+        # 2) 2차원 그리드 만들기
+        grid = []
+        for r in range(1, max_row + 1):
+            row = []
+            for c in range(1, max_col + 1):
+                if (r, c) in merged_value_map:
+                    val = merged_value_map[(r, c)]
+                else:
+                    val = ws.cell(r, c).value
+                # datetime은 문자열로 변환
+                if isinstance(val, datetime):
+                    val = val.strftime('%Y-%m-%d')
+                row.append(val)
+            grid.append(row)
+
+        # 3) 헤더 정보 추출 (To/From/Date/Ref/Attn/CC 같은 패턴 찾기)
+        self._extract_header_from_grid(grid)
+
+        # 4) 메인 견적표 헤더 행 찾기 (Item, Product, MOQ 등이 같은 행에 나오는 행)
+        header_row_idx = self._find_main_table_header_row(grid)
+        if header_row_idx is None:
+            return
+
+        # 5) 헤더 행과 데이터 행 추출
+        header_row = grid[header_row_idx]
+        data_rows = []
+        for r_idx in range(header_row_idx + 1, len(grid)):
+            row = grid[r_idx]
+            # 시트 끝부분의 Notes/Currency/서명 영역은 제외
+            row_text = ' '.join(str(c) for c in row if c is not None).lower()
+            if any(stop in row_text for stop in ['notes:', 'currency:', 'payment terms:',
+                                                  'sales supervisor', 'sales engineer', 'form no.']):
+                break
+            # 행에 데이터가 하나라도 있으면 포함
+            if any(c is not None and str(c).strip() != '' for c in row):
+                data_rows.append(row)
+
+        # 6) PDF 처리와 동일한 형태로 가공 (None은 빈 문자열로)
+        # 또한 가격 컬럼의 숫자값을 $X.XX 형식으로 변환 (PDF처럼 인식되게)
+        price_col_idx = None
+        for c_idx, h_cell in enumerate(header_row):
+            if match_column(h_cell) == 'price':
+                price_col_idx = c_idx
+                break
+
+        def _format_cell_for_pdf_compat(val, col_idx):
+            """엑셀 셀 값을 PDF 표 추출과 동일한 문자열 형태로 변환"""
+            if val is None:
+                return ''
+            # 가격 컬럼의 숫자값은 $ 기호 붙이기 (PDF와 동일하게 인식되도록)
+            if col_idx == price_col_idx and isinstance(val, (int, float)):
+                return f'${val}'
+            return str(val)
+
+        cleaned_header = [str(c) if c is not None else '' for c in header_row]
+        cleaned_data = [
+            [_format_cell_for_pdf_compat(c, i) for i, c in enumerate(row)]
+            for row in data_rows
+        ]
+        table = [cleaned_header] + cleaned_data
+
+        # 7) 표 종류 판단 후 PDF용 메서드 재사용
+        kind = classify_table(table)
+        if kind == 'main':
+            self.process_main_table(table, has_header=True)
+        elif kind == 'main_headerless':
+            self.process_main_table(table, has_header=False)
+        elif kind == 'nre':
+            self.process_nre_table(table)
+
+    def _extract_header_from_grid(self, grid):
+        """엑셀 그리드에서 To/From/Date/Attn/CC/Ref 정보 추출"""
+        for r_idx, row in enumerate(grid):
+            for c_idx, cell in enumerate(row):
+                if cell is None:
+                    continue
+                cell_str = str(cell).strip().rstrip(':').lower()
+
+                # 라벨 다음 칸에서 값 찾기
+                if cell_str in ['to', 'from', 'date', 'attn', 'ref', 'cc']:
+                    # 같은 행에서 다음에 나오는 값 있는 셀
+                    value = None
+                    for next_c in range(c_idx + 1, len(row)):
+                        next_val = row[next_c]
+                        if next_val is not None and str(next_val).strip():
+                            value = str(next_val).strip()
+                            break
+
+                    if not value:
+                        continue
+
+                    if cell_str == 'to' and 'customer' not in self.header_info:
+                        self.header_info['customer'] = value
+                    elif cell_str == 'from' and 'planner' not in self.header_info:
+                        self.header_info['planner'] = value
+                    elif cell_str == 'date' and 'date' not in self.header_info:
+                        # 이미 datetime이 yyyy-mm-dd 형식으로 변환되어 있음
+                        if re.match(r'^\d{4}-\d{2}-\d{2}', value):
+                            self.header_info['date'] = value[:10]
+                        else:
+                            self.header_info['date'] = format_date_to_iso(value)
+                    elif cell_str == 'attn' and 'attn' not in self.header_info:
+                        self.header_info['attn'] = value
+                    elif cell_str == 'ref' and 'ref' not in self.header_info:
+                        self.header_info['ref'] = value
+
+    def _find_main_table_header_row(self, grid):
+        """엑셀 그리드에서 메인 견적표의 헤더 행 인덱스 찾기.
+
+        Item/Product/MOQ/Unit Price 같은 표준 컬럼명이 같은 행에 2개 이상 있으면 그 행을 헤더로 봄.
+        """
+        for r_idx, row in enumerate(grid):
+            matched_columns = set()
+            for cell in row:
+                if cell is None:
+                    continue
+                std = match_column(cell)
+                if std:
+                    matched_columns.add(std)
+            # 표준 컬럼이 3개 이상 같은 행에 있으면 헤더로 간주
+            if len(matched_columns) >= 3 and 'price' in matched_columns:
+                return r_idx
+        return None
 
     def _build_dataframe(self):
         """수집된 데이터를 최종 CSV 행으로 변환"""
