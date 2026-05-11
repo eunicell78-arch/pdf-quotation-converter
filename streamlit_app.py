@@ -60,7 +60,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # 헤더
-st.markdown('<div class="main-header">📄 PDF 견적서 → CSV 변환기</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-header">📄 견적서 → CSV 변환기 (PDF · Excel)</div>', unsafe_allow_html=True)
 
 
 def add_source_file_column(df, source_file):
@@ -96,26 +96,26 @@ if 'just_saved' not in st.session_state:
 with st.sidebar:
     st.header("ℹ️ 사용 방법")
     st.markdown("""
-    1. PDF 견적서 파일 업로드
+    1. 견적서 파일 업로드 (PDF 또는 Excel)
     2. 변환 클릭(미리보기 확인)
     3. 저장 클릭(하단 누적)
     4. 전체 CSV 다운로드
-    5. 다음 견적서 작업 시 **🗑️ 업로드 초기화** 또는 **🆕 새 견적서 시작**
+    5. 다음 견적서 작업 시 **🆕 새 견적서 시작** 버튼 사용
 
     ---
 
     ### ✨ 특징
+    - ✅ PDF 및 Excel 견적서 지원
     - ✅ 복잡한 테이블 구조 지원
-    - ✅ 병합된 셀 처리
+    - ✅ 병합된 셀 자동 처리
     - ✅ 정확한 데이터 추출
-    - ✅ Python pdfplumber 사용
 
     ---
 
     ### 📋 지원 형식
     - 텍스트 기반 PDF
+    - Excel (.xlsx, .xls, .xlsm)
     - 견적서 테이블 구조
-    - Item, Product, MOQ 등 필드
 
     ---
 
@@ -125,23 +125,23 @@ with st.sidebar:
     """)
     
     st.markdown("---")
-    st.markdown("**버전:** 1.1.0")
-    st.markdown("**엔진:** pdfplumber")
+    st.markdown("**버전:** 1.2.0")
+    st.markdown("**엔진:** pdfplumber + openpyxl")
 
 # 메인 콘텐츠
 col1, col2 = st.columns([2, 1])
 
 with col1:
-    st.markdown('<div class="info-box">💡 PDF 업로드 후 "변환"으로 미리보기를 확인하고, "저장"을 눌러 하단 목록에 누적하세요.</div>', unsafe_allow_html=True)
+    st.markdown('<div class="info-box">💡 PDF 또는 Excel 견적서를 업로드 후 "변환"으로 미리보기를 확인하고, "저장"을 눌러 하단 목록에 누적하세요.</div>', unsafe_allow_html=True)
 
     # 파일 업로드 - key 사용으로 초기화 가능하게
-    # type 제한을 두지 않아 어떤 파일이든 받음. 변환 시 PDF가 아닌 파일은 건너뜀.
+    # type 제한을 두지 않아 어떤 파일이든 받음. 변환 시 PDF/Excel이 아닌 파일은 건너뜀.
     # 이렇게 하면 잘못된 형식의 파일을 올려도 빨간 에러 메시지가 뜨지 않음.
     uploaded_files = st.file_uploader(
-        "PDF 파일 선택 (PDF 형식만 변환 가능)",
+        "견적서 파일 선택 (PDF · Excel 변환 가능)",
         type=None,
         accept_multiple_files=True,
-        help="텍스트 기반 PDF 견적서를 업로드하세요. PDF가 아닌 파일은 변환 시 자동으로 건너뜁니다.",
+        help="PDF 또는 Excel(.xlsx) 견적서를 업로드하세요. 그 외 형식은 변환 시 자동으로 건너뜁니다.",
         key=f"file_uploader_{st.session_state.uploader_key}"
     )
 
@@ -208,20 +208,23 @@ if uploaded_files:
         batch_errors = []
         skipped_files = []  # PDF가 아닌 파일들 (조용히 건너뛰지 않고 안내만)
 
-        with st.spinner('🔄 PDF 파일 처리 중...'):
+        with st.spinner('🔄 견적서 처리 중...'):
             start_time = time.time()
 
             for selected_file_name in selected_file_names:
                 uploaded_file = uploaded_file_map[selected_file_name]
 
-                # PDF가 아닌 파일은 변환 건너뛰기 (확장자로 판별)
-                if not selected_file_name.lower().endswith('.pdf'):
+                # PDF 또는 엑셀이 아닌 파일은 변환 건너뛰기 (확장자로 판별)
+                supported_exts = ('.pdf', '.xlsx', '.xls', '.xlsm')
+                if not selected_file_name.lower().endswith(supported_exts):
                     skipped_files.append(selected_file_name)
                     continue
 
+                # 원본 확장자를 유지하며 임시 파일 저장 (converter가 확장자로 PDF/엑셀 판별)
+                file_ext = os.path.splitext(selected_file_name)[1].lower()
                 temp_pdf_path = None
                 try:
-                    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as temp_file:
+                    with tempfile.NamedTemporaryFile(suffix=file_ext, delete=False) as temp_file:
                         temp_file.write(uploaded_file.getbuffer())
                         temp_pdf_path = temp_file.name
 
@@ -256,7 +259,7 @@ if uploaded_files:
 
         if skipped_files:
             skipped_list = ', '.join(skipped_files)
-            st.warning(f"⚠️ PDF가 아닌 다음 파일은 건너뛰었습니다: {skipped_list}")
+            st.warning(f"⚠️ PDF/Excel이 아닌 다음 파일은 건너뛰었습니다: {skipped_list}")
 
         if batch_results:
             extracted_rows = sum(len(result) for _, result in batch_results)
@@ -311,7 +314,7 @@ if uploaded_files:
 
 else:
     # 초기 화면
-    st.info("👆 위의 파일 업로드 버튼을 클릭하여 PDF 견적서를 선택하세요.")
+    st.info("👆 위의 파일 업로드 버튼을 클릭하여 PDF 또는 Excel 견적서를 선택하세요.")
     
     # 데모/설명
     st.markdown("### 🎯 변환 프로세스")
@@ -320,7 +323,7 @@ else:
     
     with col1:
         st.markdown("#### 1️⃣ 업로드")
-        st.markdown("PDF 파일 선택")
+        st.markdown("PDF / Excel 선택")
     
     with col2:
         st.markdown("#### 2️⃣ 분석")
