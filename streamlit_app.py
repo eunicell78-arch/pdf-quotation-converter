@@ -56,22 +56,30 @@ st.markdown("""
         color: #721c24;
         margin: 1rem 0;
     }
-    /* 파일 업로더 에러 메시지가 업로드된 파일 카드 위로 겹쳐 X 버튼이 가려지는 문제 해결 */
-    /* 파일 업로드 영역 내부 요소들이 가로로 겹치지 않고 세로로 쌓이도록 함 */
-    [data-testid="stFileUploader"] [data-testid="stFileUploaderDropzone"] {
-        flex-wrap: wrap;
+    /* 파일 업로더 에러 풍선 도움말(툴팁)이 파일 카드의 X 버튼을 가리는 문제 해결 */
+    /* 1) 파일 업로더 안의 호버 툴팁만 선택적으로 숨김 (다른 곳의 도움말은 유지) */
+    [data-testid="stFileUploader"] [data-baseweb="tooltip"],
+    [data-testid="stFileUploader"] [role="tooltip"] {
+        display: none !important;
     }
-    /* 잘못된 파일 형식 등 에러 메시지를 파일 카드 아래로 밀어내기 */
+    /* 2) 파일 업로더 내부 에러 메시지를 파일 카드 아래로 밀어내기 */
     [data-testid="stFileUploader"] [data-testid="stAlert"],
     [data-testid="stFileUploader"] [role="alert"] {
         margin-top: 0.5rem !important;
         width: 100% !important;
         order: 99 !important;
     }
-    /* 파일 카드들이 항상 최상단에 표시되어 X 버튼이 가려지지 않게 */
-    [data-testid="stFileUploaderFile"] {
+    /* 3) 파일 카드는 항상 최상단에 표시 - 어떤 팝업도 가리지 못하게 z-index 매우 높게 */
+    [data-testid="stFileUploaderFile"],
+    [data-testid="stFileUploaderFileName"] {
         position: relative;
-        z-index: 10;
+        z-index: 9999 !important;
+    }
+    /* 4) 파일 카드의 X(삭제) 버튼은 항상 클릭 가능하게 보장 */
+    [data-testid="stFileUploaderFile"] button {
+        position: relative;
+        z-index: 10000 !important;
+        pointer-events: auto !important;
     }
     </style>
 """, unsafe_allow_html=True)
