@@ -70,12 +70,27 @@ def add_source_file_column(df, source_file):
     return df_with_source[reordered_columns]
 
 
+def reset_uploader_and_preview():
+    """업로드된 파일, 미리보기, 통계를 한 번에 초기화"""
+    # 파일 업로더의 key를 바꿔 강제 재생성 (Streamlit에서 업로드를 비우는 표준 방법)
+    st.session_state.uploader_key += 1
+    st.session_state.pending_conversions = []
+    st.session_state.pending_errors = []
+    if 'stats' in st.session_state:
+        del st.session_state['stats']
+
+
+# 세션 상태 초기화
 if 'saved_conversions' not in st.session_state:
     st.session_state.saved_conversions = []
 if 'pending_conversions' not in st.session_state:
     st.session_state.pending_conversions = []
 if 'pending_errors' not in st.session_state:
     st.session_state.pending_errors = []
+if 'uploader_key' not in st.session_state:
+    st.session_state.uploader_key = 0
+if 'just_saved' not in st.session_state:
+    st.session_state.just_saved = False
 
 # 사이드바
 with st.sidebar:
@@ -85,31 +100,32 @@ with st.sidebar:
     2. 변환 클릭(미리보기 확인)
     3. 저장 클릭(하단 누적)
     4. 전체 CSV 다운로드
-    
+    5. 다음 견적서 작업 시 **🗑️ 업로드 초기화** 또는 **🆕 새 견적서 시작**
+
     ---
-    
+
     ### ✨ 특징
     - ✅ 복잡한 테이블 구조 지원
     - ✅ 병합된 셀 처리
     - ✅ 정확한 데이터 추출
     - ✅ Python pdfplumber 사용
-    
+
     ---
-    
+
     ### 📋 지원 형식
     - 텍스트 기반 PDF
     - 견적서 테이블 구조
     - Item, Product, MOQ 등 필드
-    
+
     ---
-    
+
     ### 🔒 개인정보 보호
     모든 처리는 서버에서 이루어지며,
     파일은 처리 후 즉시 삭제됩니다.
     """)
     
     st.markdown("---")
-    st.markdown("**버전:** 1.0.0")
+    st.markdown("**버전:** 1.1.0")
     st.markdown("**엔진:** pdfplumber")
 
 # 메인 콘텐츠
@@ -118,13 +134,25 @@ col1, col2 = st.columns([2, 1])
 with col1:
     st.markdown('<div class="info-box">💡 PDF 업로드 후 "변환"으로 미리보기를 확인하고, "저장"을 눌러 하단 목록에 누적하세요.</div>', unsafe_allow_html=True)
 
-    # 파일 업로드
+    # 파일 업로드 - key 사용으로 초기화 가능하게
     uploaded_files = st.file_uploader(
         "PDF 파일 선택",
         type=['pdf'],
         accept_multiple_files=True,
-        help="텍스트 기반 PDF 견적서를 업로드하세요 (스캔 이미지 PDF는 지원하지 않습니다)"
+        help="텍스트 기반 PDF 견적서를 업로드하세요 (스캔 이미지 PDF는 지원하지 않습니다)",
+        key=f"file_uploader_{st.session_state.uploader_key}"
     )
+
+    # 저장 직후 안내 + 새 견적서 시작 버튼
+    if st.session_state.just_saved:
+        st.markdown(
+            '<div class="success-box">✅ 저장이 완료되었습니다. 다음 견적서 작업을 시작하시려면 아래 버튼을 누르세요.</div>',
+            unsafe_allow_html=True
+        )
+        if st.button("🆕 새 견적서 시작 (업로드 비우기)", use_container_width=True, type="primary"):
+            reset_uploader_and_preview()
+            st.session_state.just_saved = False
+            st.rerun()
 
 with col2:
     st.markdown("### 📊 변환 통계")
@@ -144,7 +172,8 @@ if uploaded_files:
         default=list(uploaded_file_map.keys())
     )
 
-    action_col1, action_col2, action_col3 = st.columns([1, 1, 1])
+    # 액션 버튼 4개로 확장 (변환 / 저장 / 미리보기 비우기 / 업로드 초기화)
+    action_col1, action_col2, action_col3, action_col4 = st.columns([1, 1, 1, 1])
     with action_col1:
         run_convert = st.button(
             "🔄 변환",
@@ -163,6 +192,12 @@ if uploaded_files:
             "🧹 미리보기 비우기",
             use_container_width=True,
             disabled=not (st.session_state.pending_conversions or st.session_state.pending_errors)
+        )
+    with action_col4:
+        run_reset_uploads = st.button(
+            "🗑️ 업로드 초기화",
+            use_container_width=True,
+            help="현재 업로드된 모든 PDF 파일과 미리보기를 한 번에 비웁니다."
         )
 
     if run_convert:
@@ -207,6 +242,8 @@ if uploaded_files:
                 {'source_file': file_name, 'error': file_error, 'trace': error_trace}
                 for file_name, file_error, error_trace in batch_errors
             ]
+            # 새로 변환하면 "저장 직후 상태"는 해제
+            st.session_state.just_saved = False
 
         if batch_results:
             extracted_rows = sum(len(result) for _, result in batch_results)
@@ -222,13 +259,22 @@ if uploaded_files:
         pending_rows = sum(len(item['result']) for item in st.session_state.pending_conversions)
         st.session_state.saved_conversions.extend(st.session_state.pending_conversions)
         st.session_state.pending_conversions = []
+        # 저장 완료 플래그 설정 → '🆕 새 견적서 시작' 버튼 노출
+        st.session_state.just_saved = True
         st.markdown(
             f'<div class="success-box">✅ 저장 완료! {pending_count}개 파일, {pending_rows}개 항목이 하단 목록에 누적되었습니다.</div>',
             unsafe_allow_html=True
         )
+        st.rerun()
     if run_clear_preview:
         st.session_state.pending_conversions = []
         st.session_state.pending_errors = []
+        st.rerun()
+    if run_reset_uploads:
+        # 업로드, 미리보기, 통계 모두 초기화
+        reset_uploader_and_preview()
+        st.session_state.just_saved = False
+        st.rerun()
 
     if st.session_state.pending_conversions:
         st.markdown("### 📋 변환 결과 미리보기 (저장 전)")
@@ -347,6 +393,6 @@ st.markdown("""
 <div style='text-align: center; color: #666; font-size: 0.9rem;'>
     PDF Quotation to CSV Converter | 
     Powered by pdfplumber & Streamlit | 
-    © 2025
+    © 2026
 </div>
 """, unsafe_allow_html=True)
